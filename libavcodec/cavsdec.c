@@ -994,7 +994,7 @@ static int decode_pic(AVSContext *h)
 
     av_frame_unref(h->cur.f);
 
-    skip_bits(&h->gb, 16);//bbv_dwlay
+    skip_bits(&h->gb, 16); //bbv_delay
     if (h->stc == PIC_PB_START_CODE) {
         h->cur.f->pict_type = get_bits(&h->gb, 2) + AV_PICTURE_TYPE_I;
         if (h->cur.f->pict_type > AV_PICTURE_TYPE_B) {
