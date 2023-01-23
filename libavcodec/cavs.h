@@ -64,6 +64,9 @@
 #define MV_BWD_OFFS                     12
 #define MV_STRIDE                        4
 
+#define CAVS_PROFILE_JIZHUN       0x20       // AVS1 P2
+#define CAVS_PROFILE_GUANGDIAN    0x48       // AVS1 P16/AVS+
+
 enum cavs_mb {
   I_8X8 = 0,
   P_SKIP,
