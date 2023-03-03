@@ -29,6 +29,7 @@
 #include "libavutil/mem_internal.h"
 
 #include "avcodec.h"
+#include "aec.h"
 #include "cavsdsp.h"
 #include "blockdsp.h"
 #include "h264chroma.h"
@@ -66,6 +67,8 @@
 
 #define CAVS_PROFILE_JIZHUN       0x20       // AVS1 P2
 #define CAVS_PROFILE_GUANGDIAN    0x48       // AVS1 P16/AVS+
+
+#define AEC_CONTEXTS                  323
 
 enum cavs_mb {
   I_8X8 = 0,
@@ -149,6 +152,24 @@ enum cavs_mv_loc {
   MV_BWD_X3
 };
 
+enum aec_ctx_offset {
+  MB_SKIP_RUN = 0,
+  MB_TYPE = 4,
+  MB_PART_TYPE = 19,
+  INTRA_LUMA_PRED_MODE = 22,
+  INTRA_CHROMA_PRED_MODE = 26,
+  MB_REFERENCE_INDEX = 30,
+  MV_DIFF_X = 36,
+  MV_DIFF_Y = 42,
+  CBP = 48,
+  MB_QP_DELTA = 54,
+  TRANS_COEFFICIENT_FRAME_LUMA = 58,
+  TRANS_COEFFICIENT_FRAME_CHROMA = 124,
+  TRANS_COEFFICIENT_FIELD_LUMA = 190,
+  TRANS_COEFFICIENT_FIELD_CHROMA = 256,
+  WEIGHTING_PREDICTION = 322
+};
+
 DECLARE_ALIGNED(8, typedef, struct) {
     int16_t x;
     int16_t y;
@@ -164,6 +185,11 @@ struct dec_2dvlc {
   int8_t max_run;
 };
 
+typedef struct Aec {
+  AecDec aecdec;
+  AecCtx aecctx[AEC_CONTEXTS];
+} Aec;
+
 typedef struct AVSFrame {
     AVFrame *f;
     int poc;
@@ -178,6 +204,7 @@ typedef struct AVSContext {
     GetBitContext gb;
     AVSFrame cur;     ///< currently decoded frame
     AVSFrame DPB[2];  ///< reference frames
+    Aec aec;
     int dist[2];     ///< temporal distances from current frame to ref frames
     int low_delay;
     int profile, level;
@@ -191,6 +218,7 @@ typedef struct AVSContext {
     int loop_filter_disable;
     int alpha_offset, beta_offset;
     int ref_flag;
+    int aec_flag;
     int mbx, mby, mbidx; ///< macroblock coordinates
     int flags;         ///< availability flags of neighbouring macroblocks
     int stc;           ///< last start code
@@ -219,13 +247,25 @@ typedef struct AVSContext {
        3:    A1  X0  X1
        6:    A3  X2  X3   */
     int pred_mode_Y[3*3];
+    /** chroma pred mode cache
+     * A = Left
+     * B = Top
+    */
+    int pred_mode_C_A;
+    int pred_mode_C_B;
     int *top_pred_Y;
+    int *top_pred_C;
+
+    int nz_coeff_A;
+    int nz_coeff_B;
+    int *nz_coeff;
     ptrdiff_t l_stride, c_stride;
     int luma_scan[4];
     int qp;
     int qp_fixed;
     int pic_qp_fixed;
     int cbp;
+    int *top_cbp;
     uint8_t permutated_scantable[64];
 
     /** intra prediction is done with un-deblocked samples
