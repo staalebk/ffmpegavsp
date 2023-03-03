@@ -861,7 +861,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         }
         ctxIdxInc = a + 2*b;  //TODO: look up b and add variable length
         printf("CBP ctx: %d\n", ctxIdxInc);
-        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
         cbp_code |= (bit<<bitpos);
         bitpos++;
 
@@ -874,7 +874,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         }
         ctxIdxInc = a + 2*b;
         printf("CBP ctx: %d\n", ctxIdxInc);
-        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
         cbp_code |= (bit<<bitpos);
         bitpos++;
 
@@ -891,7 +891,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         }
         ctxIdxInc = a + 2*b;
         printf("CBP ctx: %d\n", ctxIdxInc);
-        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
         cbp_code |= (bit<<bitpos);
         bitpos++;
 
@@ -908,22 +908,22 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         }
         ctxIdxInc = a + 2*b;
         printf("CBP ctx: %d\n", ctxIdxInc);
-        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
         cbp_code |= (bit<<bitpos);
 
         /** Read 1st Chroma bit */
         ctxIdxInc = 4;
-        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+        bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
         if(bit) {
             /** Read 2nd Chroma bit*/
             ctxIdxInc = 5;
-            bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+            bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
             if(bit) {
                 cbp_code |=(1<<4);
                 cbp_code |=(1<<5);
             } else {
                 /** Read 3rd Chroma bit*/
-                bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, true);
+                bit = aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[CBP + ctxIdxInc], NULL, false);
                 if(bit)
                     cbp_code |= (1<<5);
                 else
@@ -942,26 +942,30 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         if(!h->aec_flag) {
             h->qp = (h->qp + (unsigned)get_se_golomb(gb)) & 63; //qp_delta
         } else {
-            int qp = h->qp;
             int ctxIdxInc = 0;
             int symbol = 0;
-            if (qp)
+            if (h->qp_delta_last)
                 ctxIdxInc = 1;
-            while(aec_decode_bin(&h->aec.aecdec, gb, 0, &h->aec.aecctx[MB_QP_DELTA + ctxIdxInc], NULL) == 0) {
+            printf("qp ctx: %d\n", ctxIdxInc);
+            while(aec_decode_bin_debug(&h->aec.aecdec, gb, 0, &h->aec.aecctx[MB_QP_DELTA + ctxIdxInc], NULL, true) == 0) {
                 symbol++;
                 if (symbol == 1)
                     ctxIdxInc = 2;
                 else
                     ctxIdxInc = 3;
+                printf("qp ctx: %d\n", ctxIdxInc);
             }
             if(symbol%2 == 0)
                 symbol = -((symbol + 1)/2);
             else
                 symbol = (symbol + 1)/2;
-            h->qp = qp + symbol;
+            h->qp_delta_last = symbol;
+            h->qp = h->qp + symbol;
             printf("QP Delta: %d\n", symbol);
         }
         printf("QP: %d\n", h->qp);
+    } else {
+        h->qp_delta_last = 0;
     }
     printf("After QP\n");
     aec_debug(&h->aec.aecdec, NULL, NULL);

@@ -263,6 +263,7 @@ typedef struct AVSContext {
     int luma_scan[4];
     int qp;
     int qp_fixed;
+    int qp_delta_last;
     int pic_qp_fixed;
     int cbp;
     int *top_cbp;
