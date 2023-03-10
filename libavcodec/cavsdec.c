@@ -670,7 +670,7 @@ static int decode_residual_block(AVSContext *h, GetBitContext *gb,
             if (!esc_golomb_order)
                 level_buf[i] = 0;
             */    
-            run_buf[i]   = run;
+            run_buf[i]   = run + 1; //TODO: +1 belongs in the dequant part according to spec, not sure why the original code is as it is.
             
             pos += run + 1;
             if(pos >= 64)
@@ -761,7 +761,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         aec_debug(&h->aec.aecdec, NULL, NULL);
     */
     aec_log(&h->aec.aecdec, "---------------------- Macroblock ----------------------------------------", h->mbidx);
-    printf("--------MB %d ----------\n", h->mbidx);
+    //printf("--------MB %d ----------\n", h->mbidx);
 
     for (block = 0; block < 4; block++) {
         int nA, nB, predpred;
@@ -997,7 +997,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
     if (ret < 0)
         return ret;
     ret = aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false);
-    printf("stuffing : %d\n", ret);
+    //printf("stuffing : %d\n", ret);
     if(ret)
         aec_debug(&h->aec.aecdec, NULL, NULL);
     ff_cavs_filter(h, I_8X8);

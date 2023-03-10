@@ -741,7 +741,6 @@ int ff_cavs_init_pic(AVSContext *h)
     h->cy             = h->cur.f->data[0];
     h->cu             = h->cur.f->data[1];
     h->cv             = h->cur.f->data[2];
-    printf("stride: %d\n", h->cur.f->linesize[0]);
     h->l_stride       = h->cur.f->linesize[0];
     h->c_stride       = h->cur.f->linesize[1];
     h->luma_scan[2]   = 8 * h->l_stride;
