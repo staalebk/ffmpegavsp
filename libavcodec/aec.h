@@ -25,6 +25,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h> // TODO REMOVE?
 
 #include "get_bits.h"
 
@@ -44,6 +45,8 @@ typedef struct AecDec {
     uint32_t boundS;    // greater than 0, precision is smallest int equal to or greater than Log(boundS+1)
     //uint8_t valueD;     // 1 or 2
     bool initialized;
+    FILE *f; // TODO: Remove, this was used for debugging
+    bool debug; // TODO: Remove
 } AecDec;
 
 void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb);
@@ -54,6 +57,7 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
 int aec_decode_bypass(AecDec *aecdec, GetBitContext *gb);
 int aec_decode_bypass_debug(AecDec *aecdec, GetBitContext *gb, bool dbg);
 void aec_debug(AecDec *aecdec, AecCtx *ctx1, AecCtx *ctx2);
+void aec_log(AecDec *aecdec, const char *msg, int value);
 int aec_decode_stuffing_bit(AecDec *aecdec, GetBitContext *gb, bool dbg);
 
 #endif /* AVCODEC_AEC_H */

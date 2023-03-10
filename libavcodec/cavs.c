@@ -698,6 +698,7 @@ int ff_cavs_next_mb(AVSContext *h)
     h->mbx++;
     if (h->mbx == h->mb_width) { // New mb line
         h->flags = B_AVAIL | C_AVAIL;
+        //h->qp_delta_last = 0;
         /* clear left pred_modes */
         h->pred_mode_Y[3] = h->pred_mode_Y[6] = NOT_AVAIL;
         h->pred_mode_C_A = NOT_AVAIL;
@@ -710,6 +711,7 @@ int ff_cavs_next_mb(AVSContext *h)
         h->cy = h->cur.f->data[0] + h->mby * 16 * h->l_stride;
         h->cu = h->cur.f->data[1] + h->mby * 8 * h->c_stride;
         h->cv = h->cur.f->data[2] + h->mby * 8 * h->c_stride;
+        printf("\t\t\t--------------- %d %d\n", h->mby, h->mb_height);
         if (h->mby == h->mb_height) { // Frame end
             return 0;
         }
@@ -739,6 +741,7 @@ int ff_cavs_init_pic(AVSContext *h)
     h->cy             = h->cur.f->data[0];
     h->cu             = h->cur.f->data[1];
     h->cv             = h->cur.f->data[2];
+    printf("stride: %d\n", h->cur.f->linesize[0]);
     h->l_stride       = h->cur.f->linesize[0];
     h->c_stride       = h->cur.f->linesize[1];
     h->luma_scan[2]   = 8 * h->l_stride;
@@ -768,6 +771,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
     h->top_mv[1]    = av_calloc(h->mb_width * 2 + 1,  sizeof(cavs_vector));
     h->top_pred_Y   = av_calloc(h->mb_width * 2,  sizeof(*h->top_pred_Y));
     h->top_pred_C   = av_calloc(h->mb_width,  sizeof(*h->top_pred_C));
+    h->top_cbp      = av_calloc(h->mb_width,  sizeof(*h->top_cbp));
     h->nz_coeff     = av_calloc(h->mb_width,  sizeof(*h->nz_coeff));
     h->top_border_y = av_calloc(h->mb_width + 1,  16);
     h->top_border_u = av_calloc(h->mb_width,  10);
@@ -781,12 +785,14 @@ int ff_cavs_init_top_lines(AVSContext *h)
 
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
         !h->top_border_y || !h->top_border_u || !h->top_border_v ||
-        !h->col_mv || !h->col_type_base || !h->block || !h->top_pred_C || !h->nz_coeff) {
+        !h->col_mv || !h->col_type_base || !h->block || !h->top_pred_C || 
+        !h->nz_coeff || !h->top_cbp) {
         av_freep(&h->top_qp);
         av_freep(&h->top_mv[0]);
         av_freep(&h->top_mv[1]);
         av_freep(&h->top_pred_Y);
         av_freep(&h->top_pred_C);
+        av_freep(&h->top_cbp);
         av_freep(&h->nz_coeff);
         av_freep(&h->top_border_y);
         av_freep(&h->top_border_u);
@@ -799,6 +805,17 @@ int ff_cavs_init_top_lines(AVSContext *h)
     return 0;
 }
 
+static const uint8_t zigzag_no2[64] = {
+ 0,  8, 16,  1, 24, 32,  9, 17,
+40, 48, 25,  2, 10, 56, 33, 18,
+ 3, 41, 49, 26, 11, 19,  4, 57,
+34, 12, 42, 27, 20, 50, 35, 28,
+ 5, 13, 58, 43, 36, 21,  6, 29,
+51, 44, 14, 22, 37, 59, 52, 30,
+45, 60, 38, 53, 46, 61, 54, 7,
+62, 15, 23, 31, 39, 47, 55, 63
+};
+
 av_cold int ff_cavs_init(AVCodecContext *avctx)
 {
     AVSContext *h = avctx->priv_data;
@@ -809,7 +826,8 @@ av_cold int ff_cavs_init(AVCodecContext *avctx)
     ff_videodsp_init(&h->vdsp, 8);
     ff_cavsdsp_init(&h->cdsp);
     ff_init_scantable_permutation(permutation, h->cdsp.idct_perm);
-    ff_permute_scantable(h->permutated_scantable, ff_zigzag_direct, permutation);
+    ff_permute_scantable(h->permutated_scantable, zigzag_no2, permutation);
+//    ff_permute_scantable(h->permutated_scantable, ff_zigzag_direct, permutation);
 
     h->avctx       = avctx;
     avctx->pix_fmt = AV_PIX_FMT_YUV420P;
@@ -855,6 +873,7 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
     av_freep(&h->top_mv[1]);
     av_freep(&h->top_pred_Y);
     av_freep(&h->top_pred_C);
+    av_freep(&h->top_cbp);
     av_freep(&h->nz_coeff);
     av_freep(&h->top_border_y);
     av_freep(&h->top_border_u);

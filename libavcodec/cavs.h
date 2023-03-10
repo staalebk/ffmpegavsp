@@ -213,6 +213,7 @@ typedef struct AVSContext {
     int width, height;
     int stream_revision; ///<0 for samples from 2006, 1 for rm52j encoder
     int progressive;
+    int progressive_sequence;
     int pic_structure;
     int skip_mode_flag; ///< select between skip_count or one skip_flag per MB
     int loop_filter_disable;

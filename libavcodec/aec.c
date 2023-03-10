@@ -22,24 +22,45 @@
 #include "aec.h"
 #include "get_bits.h"
 
-int dbg_get_bits(GetBitContext *gb, int n, const char *c, bool dbg);
+int dbg_get_bits(GetBitContext *gb, int n, const char *c, bool dbg, FILE *f);
 
-int dbg_get_bits(GetBitContext *gb, int n, const char *c, bool dbg){
-    int b = get_bits(gb,n);
-    if (dbg)
-        printf("Read: %d    %s\n", b, c);
+int dbg_get_bits(GetBitContext *gb, int n, const char *c, bool dbg, FILE *f){
+    static unsigned int buf = 0xFFFFFF;
+    int b;
+    int align;
+    if(!(buf & 0x3FFFFF)) {
+        align = (-get_bits_count(gb)) & 7;
+        if(show_bits(gb,2) == 2 && align == 2){
+            b = get_bits(gb,2);
+            buf = 0xFFFFFF;
+            //printf("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n");
+            if (f != NULL && dbg) {     
+                fprintf(f, "read bit: %d SKIPPED\n", b);
+                fprintf(f, "read bit: %d SKIPPED\n", align);
+            }
+        }
+    }
+    b = get_bits(gb,n);
+    buf = (buf<<n) | b;
+    /*
+    if (f != NULL)
+        fprintf(f, "bufferbit: %u\n", buf);
+        */
+    if (f != NULL && dbg)
+        fprintf(f, "read bit: %d\n", b);
     return(b);
 }
 
 void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb) {
+    const char *filename = "dbg.txt";
     printf("Initializing AEC decoder!\n");
     aecdec->rS1 = 0;
     aecdec->rT1 = 0xFF;
     aecdec->boundS = 0xFE;
     aecdec->valueS = 0;
-    aecdec->valueT = dbg_get_bits(gb, 9, "init", true);
+    aecdec->valueT = dbg_get_bits(gb, 9, "init", false, aecdec->f);
     while(!((aecdec->valueT>>8) & 0x01) && aecdec->valueS < aecdec->boundS) {
-        aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb, 1, "init2", true);
+        aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb, 1, "init2", false, aecdec->f);
         aecdec->valueS++;
     }
     if(aecdec->valueT < 0x100)
@@ -48,6 +69,17 @@ void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb) {
         aecdec->bFlag = 0;
     aecdec->valueT = aecdec->valueT & 0xFF;
     aecdec->initialized = true;
+
+    // Debugging code:
+
+    aecdec->f = fopen(filename, "w");
+    if(aecdec->f == NULL) {
+        printf("Error opening debug file %s.\n", filename);
+        exit(1);
+    }
+    aecdec->debug = false;
+    if(aecdec->debug)
+        fprintf(aecdec->f, "Debug started.\n");
 }
 
 void aec_init_aecctx(AecCtx *aecctx) {
@@ -109,8 +141,9 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
     if (!aecdec->initialized) {
         aec_init_aecdec(aecdec, gb);
     }
-    if (dbg) {
-        printf("ctx: %d %d %d \taec: %d %d %d %d %d %d\n",ctx->cycno, ctx->lgPmps, ctx->mps, aecdec->bFlag, aecdec->boundS, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
+    dbg = aecdec->debug;
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "ctx: %d %d %d \taec: %d %d %d %d\n",ctx->cycno, ctx->lgPmps, ctx->mps, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
     }
 
 	if ( contextWeighting == 1 ) {
@@ -148,10 +181,10 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
 		if ( rS2 == aecdec->valueS )
 			aecdec->valueT = aecdec->valueT - rT2;
 		else
-			aecdec->valueT = 256 + ((aecdec->valueT << 1 ) | dbg_get_bits(gb,1, "b1", dbg)) - rT2;
+			aecdec->valueT = 256 + ((aecdec->valueT << 1 ) | dbg_get_bits(gb,1, "b1", dbg, aecdec->f)) - rT2;
 		while ( tRlps < 0x100 ) {
 			tRlps = tRlps << 1;
-			aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"b2", dbg);
+			aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"b2", dbg, aecdec->f);
 		}
 		aecdec->rT1 = tRlps & 0xFF;
 	} else {
@@ -164,7 +197,7 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
 		aecdec->valueS = 0;
 		while ( aecdec->valueT < 0x100 ) {
 			aecdec->valueS++;
-			aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"b3", dbg);
+			aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"b3", dbg, aecdec->f);
 		}
 		if ( aecdec->valueT < 0x100 )
 			aecdec->bFlag = 1;
@@ -179,8 +212,8 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
 		//ctx = update_ctx(binVal, ctx);
         update_ctx(binVal, ctx);
 	}
-    if (dbg) {
-        printf("aec_decode_bin:\t%d\n", binVal);
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "bit return: %d\n", binVal);
     }
 
 	return (binVal);
@@ -198,6 +231,10 @@ int aec_decode_bypass_debug(AecDec *aecdec, GetBitContext *gb, bool dbg) {
     int sFlag;
     int binVal;
     int tRlps;
+    dbg = aecdec->debug;
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "ctx: %d %d %d \taec: %d %d %d %d\n",0, lgPmps, 0, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
+    }
     if ( aecdec->rT1 >= (lgPmps >> 2) ) {
         rS2 = aecdec->rS1;
         rT2 = aecdec->rT1 - (lgPmps >> 2 );
@@ -216,17 +253,17 @@ int aec_decode_bypass_debug(AecDec *aecdec, GetBitContext *gb, bool dbg) {
         if ( rS2 == aecdec->valueS )
             aecdec->valueT = aecdec->valueT - rT2;
         else
-            aecdec->valueT = ((aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by1", dbg)) - rT2 + 256;
+            aecdec->valueT = ((aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by1", dbg, aecdec->f)) - rT2 + 256;
         while ( tRlps < 0x100 ) {
             tRlps = tRlps << 1;
-            aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by2", dbg);
+            aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by2", dbg, aecdec->f);
         }
         aecdec->rS1 = 0;
         aecdec->rT1 = tRlps & 0xFF;
         aecdec->valueS = 0;
         while ( aecdec->valueT < 0x100 ) {
             aecdec->valueS++;
-            aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by3", dbg);
+            aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by3", dbg, aecdec->f);
         }
         aecdec->valueT = aecdec->valueT & 0xFF;
     } else {
@@ -234,8 +271,6 @@ int aec_decode_bypass_debug(AecDec *aecdec, GetBitContext *gb, bool dbg) {
         aecdec->rS1 = rS2;
         aecdec->rT1 = rT2;
     }
-    if (dbg)
-        printf("aec_decode_bypass:\t%d\n", binVal);
     return (binVal);
 }
 
@@ -247,6 +282,10 @@ int aec_decode_stuffing_bit(AecDec *aecdec, GetBitContext *gb, bool dbg) {
     int sFlag;
     int binVal;
     int tRlps;
+    dbg = aecdec->debug;
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "ctx: %d %d %d \taec: %d %d %d %d\n",1, lgPmps, 0, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
+    }
 
     if ( aecdec->rT1 >= (lgPmps >> 2) ) {
         rS2 = aecdec->rS1;
@@ -266,17 +305,17 @@ int aec_decode_stuffing_bit(AecDec *aecdec, GetBitContext *gb, bool dbg) {
         if ( rS2 == aecdec->valueS )
             aecdec->valueT = aecdec->valueT - rT2;
         else
-            aecdec->valueT = 256 + ((aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb1", dbg)) - rT2;
+            aecdec->valueT = 256 + ((aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb1", dbg, aecdec->f)) - rT2;
         while ( tRlps < 0x100 ) {
             tRlps = tRlps << 1;
-            aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb2", dbg);
+            aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb2", dbg, aecdec->f);
         }
         aecdec->rS1 = 0;
         aecdec->rT1 = tRlps & 0xFF;
         aecdec->valueS = 0;
         while ( aecdec->valueT < 0x100 ) {
             aecdec->valueS++;
-            aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb3", dbg);
+            aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb3", dbg, aecdec->f);
         }
         aecdec->valueT = aecdec->valueT & 0xFF;
     } else {
@@ -284,13 +323,20 @@ int aec_decode_stuffing_bit(AecDec *aecdec, GetBitContext *gb, bool dbg) {
         aecdec->rS1 = rS2;
         aecdec->rT1 = rT2;
     }
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "bit return: %d\n", binVal);
+    }
     return (binVal);
 }
 
 void aec_debug(AecDec *aecdec, AecCtx *ctx1, AecCtx *ctx2) {
-    printf("AEC: %d %d %d %d %d %d\n", -1, -1, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
-    if (ctx1 != NULL)
-        printf("ctx: %d %d %d\n",ctx1->cycno, ctx1->lgPmps, ctx1->mps);
-    if (ctx2 != NULL)
-        printf("ctx2: %d %d %d\n",ctx2->cycno, ctx2->lgPmps, ctx2->mps);
+    aecdec->debug = true;
+}
+
+void aec_log(AecDec *aecdec, const char *msg, int value) {
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "aec: %d %d %d %d\n", aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
+        fprintf(aecdec->f, "%s : %d\n", msg, value);
+        fprintf(aecdec->f, "----------------\n");
+    }
 }
