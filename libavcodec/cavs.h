@@ -35,6 +35,7 @@
 #include "h264chroma.h"
 #include "get_bits.h"
 #include "videodsp.h"
+#include "cavs_aec_symbols.h"
 
 #define SLICE_MAX_START_CODE    0x000001af
 #define EXT_START_CODE          0x000001b5
@@ -68,7 +69,6 @@
 #define CAVS_PROFILE_JIZHUN       0x20       // AVS1 P2
 #define CAVS_PROFILE_GUANGDIAN    0x48       // AVS1 P16/AVS+
 
-#define AEC_CONTEXTS                  323
 
 enum cavs_mb {
   I_8X8 = 0,
@@ -152,22 +152,10 @@ enum cavs_mv_loc {
   MV_BWD_X3
 };
 
-enum aec_ctx_offset {
-  MB_SKIP_RUN = 0,
-  MB_TYPE = 4,
-  MB_PART_TYPE = 19,
-  INTRA_LUMA_PRED_MODE = 22,
-  INTRA_CHROMA_PRED_MODE = 26,
-  MB_REFERENCE_INDEX = 30,
-  MV_DIFF_X = 36,
-  MV_DIFF_Y = 42,
-  CBP = 48,
-  MB_QP_DELTA = 54,
-  TRANS_COEFFICIENT_FRAME_LUMA = 58,
-  TRANS_COEFFICIENT_FRAME_CHROMA = 124,
-  TRANS_COEFFICIENT_FIELD_LUMA = 190,
-  TRANS_COEFFICIENT_FIELD_CHROMA = 256,
-  WEIGHTING_PREDICTION = 322
+enum cavs_mv_direction {
+  MV_NONE = 0,
+  MV_FWD = 1,
+  MV_BWD = 2
 };
 
 DECLARE_ALIGNED(8, typedef, struct) {
@@ -175,6 +163,7 @@ DECLARE_ALIGNED(8, typedef, struct) {
     int16_t y;
     int16_t dist;
     int16_t ref;
+    int8_t direction;
 } cavs_vector;
 
 struct dec_2dvlc {
@@ -184,11 +173,6 @@ struct dec_2dvlc {
   int inc_limit;
   int8_t max_run;
 };
-
-typedef struct Aec {
-  AecDec aecdec;
-  AecCtx aecctx[AEC_CONTEXTS];
-} Aec;
 
 typedef struct AVSFrame {
     AVFrame *f;
@@ -203,9 +187,9 @@ typedef struct AVSContext {
     CAVSDSPContext  cdsp;
     GetBitContext gb;
     AVSFrame cur;     ///< currently decoded frame
-    AVSFrame DPB[2];  ///< reference frames
+    AVSFrame DPB[4];  ///< reference frames/fields
     Aec aec;
-    int dist[2];     ///< temporal distances from current frame to ref frames
+    int dist[4];     ///< temporal distances from current frame to ref frames/fields
     int low_delay;
     int profile, level;
     int aspect_ratio;
@@ -219,10 +203,11 @@ typedef struct AVSContext {
     int loop_filter_disable;
     int alpha_offset, beta_offset;
     int ref_flag;
-    int aec_flag;
+    int aec_enable;
     int mbx, mby, mbidx; ///< macroblock coordinates
     int flags;         ///< availability flags of neighbouring macroblocks
     int stc;           ///< last start code
+    int field;         ///< Which field we are on, 0 for first, 1 for second.
     uint8_t *cy, *cu, *cv; ///< current MB sample pointers
     int left_qp;
     uint8_t *top_qp;
@@ -267,6 +252,8 @@ typedef struct AVSContext {
     int qp_delta_last;
     int pic_qp_fixed;
     int cbp;
+    int tcbp;
+    int lcbp;
     int *top_cbp;
     uint8_t permutated_scantable[64];
 
@@ -283,8 +270,8 @@ typedef struct AVSContext {
 
     /* scaling factors for MV prediction */
     int sym_factor;    ///< for scaling in symmetrical B block
-    int direct_den[2]; ///< for scaling in direct B block
-    int scale_den[2];  ///< for scaling neighbouring MVs
+    int direct_den[4]; ///< for scaling in direct B block
+    int scale_den[4];  ///< for scaling neighbouring MVs
 
     uint8_t *edge_emu_buffer;
 

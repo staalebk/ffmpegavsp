@@ -71,15 +71,14 @@ void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb) {
     aecdec->initialized = true;
 
     // Debugging code:
-
-    aecdec->f = fopen(filename, "w");
+    if(aecdec->f == NULL) {
+        aecdec->f = fopen(filename, "w");
+        aecdec->debug = false;
+    }
     if(aecdec->f == NULL) {
         printf("Error opening debug file %s.\n", filename);
         exit(1);
     }
-    aecdec->debug = false;
-    if(aecdec->debug)
-        fprintf(aecdec->f, "Debug started.\n");
 }
 
 void aec_init_aecctx(AecCtx *aecctx) {
@@ -271,6 +270,9 @@ int aec_decode_bypass_debug(AecDec *aecdec, GetBitContext *gb, bool dbg) {
         aecdec->rS1 = rS2;
         aecdec->rT1 = rT2;
     }
+    if(aecdec->debug) {
+        fprintf(aecdec->f, "bit return: %d\n", binVal);
+    }
     return (binVal);
 }
 
@@ -338,5 +340,6 @@ void aec_log(AecDec *aecdec, const char *msg, int value) {
         fprintf(aecdec->f, "aec: %d %d %d %d\n", aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
         fprintf(aecdec->f, "%s : %d\n", msg, value);
         fprintf(aecdec->f, "----------------\n");
+        fflush(aecdec->f);
     }
 }

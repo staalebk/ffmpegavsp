@@ -612,8 +612,22 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
         mv_pred_median(h, mvP, mvA, mvB, mvC);
 
     if (mode < MV_PRED_PSKIP) {
-        int mx = get_se_golomb(&h->gb) + (unsigned)mvP->x;
-        int my = get_se_golomb(&h->gb) + (unsigned)mvP->y;
+        int mx;
+        int my;
+        if(!h->aec_enable) {
+            mx = get_se_golomb(&h->gb) + (unsigned)mvP->x;
+            my = get_se_golomb(&h->gb) + (unsigned)mvP->y;
+        } else {
+            int mvdax = 0;
+            int mvday = 0;
+            if (mvA->ref != NOT_AVAIL) {
+                mvdax = abs(mvA->x);
+                mvday = abs(mvA->y);
+            }
+            mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax); // + (unsigned)mvP->x;
+            my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday); // + (unsigned)mvP->y;
+            //printf("GEEK %d %d %d %d\n", mvdax, mvday, mx, my);
+        }
 
         if (mx != (int16_t)mx || my != (int16_t)my) {
             av_log(h->avctx, AV_LOG_ERROR, "MV %d %d out of supported range\n", mx, my);
@@ -680,7 +694,7 @@ void ff_cavs_init_mb(AVSContext *h)
 int ff_cavs_next_mb(AVSContext *h)
 {
     int i;
-
+    aec_log(&h->aec.aecdec, "---------------------- Macroblock ----------------------------------------", h->mbidx + 1);
     h->flags |= A_AVAIL;
     h->cy    += 16;
     h->cu    += 8;
@@ -693,6 +707,10 @@ int ff_cavs_next_mb(AVSContext *h)
     h->top_mv[0][h->mbx * 2 + 1] = h->mv[MV_FWD_X3];
     h->top_mv[1][h->mbx * 2 + 0] = h->mv[MV_BWD_X2];
     h->top_mv[1][h->mbx * 2 + 1] = h->mv[MV_BWD_X3];
+    /* copy CBP to top line */
+    h->top_cbp[h->mbx] = h->tcbp;
+    h->lcbp = h->tcbp;
+    h->tcbp = 0;
     /* next MB address */
     h->mbidx++;
     h->mbx++;
@@ -713,6 +731,7 @@ int ff_cavs_next_mb(AVSContext *h)
         h->cv = h->cur.f->data[2] + h->mby * 8 * h->c_stride;
         printf("\t\t\t--------------- %d %d\n", h->mby, h->mb_height);
         if (h->mby == h->mb_height) { // Frame end
+            printf("Frame end!\n");
             return 0;
         }
     }
@@ -834,7 +853,9 @@ av_cold int ff_cavs_init(AVCodecContext *avctx)
     h->cur.f    = av_frame_alloc();
     h->DPB[0].f = av_frame_alloc();
     h->DPB[1].f = av_frame_alloc();
-    if (!h->cur.f || !h->DPB[0].f || !h->DPB[1].f)
+    h->DPB[2].f = av_frame_alloc();
+    h->DPB[3].f = av_frame_alloc();
+    if (!h->cur.f || !h->DPB[0].f || !h->DPB[1].f || !h->DPB[2].f || !h->DPB[3].f)
         return AVERROR(ENOMEM);
 
     h->luma_scan[0]                     = 0;
@@ -866,6 +887,8 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
     av_frame_free(&h->cur.f);
     av_frame_free(&h->DPB[0].f);
     av_frame_free(&h->DPB[1].f);
+    av_frame_free(&h->DPB[2].f);
+    av_frame_free(&h->DPB[3].f);
 
     av_freep(&h->top_qp);
     av_freep(&h->top_mv[0]);
