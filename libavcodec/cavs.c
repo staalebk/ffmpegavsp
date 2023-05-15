@@ -56,7 +56,7 @@ static const uint8_t tc_tab[64] = {
 
 /** mark block as unavailable, i.e. out of picture
  *  or not yet decoded */
-static const cavs_vector un_mv = { 0, 0, 1, NOT_AVAIL };
+static const cavs_vector un_mv = { 0, 0, 1, NOT_AVAIL, NOT_AVAIL };
 
 static const int8_t left_modifier_l[8] = {  0, -1,  6, -1, -1, 7, 6, 7 };
 static const int8_t top_modifier_l[8]  = { -1,  1,  5, -1, -1, 5, 7, 7 };
@@ -366,7 +366,7 @@ void ff_cavs_modify_mb_i(AVSContext *h, int *pred_mode_uv)
     h->top_pred_Y[h->mbx * 2 + 0] = h->pred_mode_Y[7];
     h->top_pred_Y[h->mbx * 2 + 1] = h->pred_mode_Y[8];
     h->pred_mode_C_B              = *pred_mode_uv;
-    h->top_pred_C[h->mbx]         = *pred_mode_uv; 
+    //h->top_pred_C[h->mbx]         = *pred_mode_uv; 
 
     /* modify pred modes according to availability of neighbour samples */
     if (!(h->flags & A_AVAIL)) {
@@ -635,6 +635,9 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
             mvP->x = mx;
             mvP->y = my;
         }
+    } else {
+        mvP->x = 0;
+        mvP->y = 0;
     }
     set_mvs(mvP, size);
 }
@@ -699,18 +702,28 @@ int ff_cavs_next_mb(AVSContext *h)
     h->cy    += 16;
     h->cu    += 8;
     h->cv    += 8;
-    /* copy mvs as predictors to the left */
-    for (i = 0; i <= 20; i += 4)
-        h->mv[i] = h->mv[i + 2];
+    
     /* copy bottom mvs from cache to top line */
     h->top_mv[0][h->mbx * 2 + 0] = h->mv[MV_FWD_X2];
     h->top_mv[0][h->mbx * 2 + 1] = h->mv[MV_FWD_X3];
     h->top_mv[1][h->mbx * 2 + 0] = h->mv[MV_BWD_X2];
     h->top_mv[1][h->mbx * 2 + 1] = h->mv[MV_BWD_X3];
+
+    /* copy mvs as predictors to the left */
+    for (i = 0; i <= 20; i += 4) {
+        h->mv[i] = h->mv[i + 2];
+        h->mv[i+1] = h->mv[i + 2 + 1];
+    }
     /* copy CBP to top line */
     h->top_cbp[h->mbx] = h->tcbp;
     h->lcbp = h->tcbp;
     h->tcbp = 0;
+    h->qp_delta_last = h->qp_delta;
+    h->qp_delta = 0;
+
+    /* copy Chroma Pred to top line */
+    h->top_pred_C[h->mbx] = h->chroma_pred;
+    h->chroma_pred = 0;
     /* next MB address */
     h->mbidx++;
     h->mbx++;
@@ -855,6 +868,7 @@ av_cold int ff_cavs_init(AVCodecContext *avctx)
     h->DPB[1].f = av_frame_alloc();
     h->DPB[2].f = av_frame_alloc();
     h->DPB[3].f = av_frame_alloc();
+    h->combined.f = av_frame_alloc();
     if (!h->cur.f || !h->DPB[0].f || !h->DPB[1].f || !h->DPB[2].f || !h->DPB[3].f)
         return AVERROR(ENOMEM);
 
@@ -889,6 +903,7 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
     av_frame_free(&h->DPB[1].f);
     av_frame_free(&h->DPB[2].f);
     av_frame_free(&h->DPB[3].f);
+    av_frame_free(&h->combined.f);
 
     av_freep(&h->top_qp);
     av_freep(&h->top_mv[0]);

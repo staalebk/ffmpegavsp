@@ -164,6 +164,8 @@ DECLARE_ALIGNED(8, typedef, struct) {
     int16_t dist;
     int16_t ref;
     int8_t direction;
+    //int16_t dx;
+    //int16_t dy;
 } cavs_vector;
 
 struct dec_2dvlc {
@@ -188,6 +190,7 @@ typedef struct AVSContext {
     GetBitContext gb;
     AVSFrame cur;     ///< currently decoded frame
     AVSFrame DPB[4];  ///< reference frames/fields
+    AVSFrame combined; ///< Combined fields into one frame
     Aec aec;
     int dist[4];     ///< temporal distances from current frame to ref frames/fields
     int low_delay;
@@ -202,7 +205,7 @@ typedef struct AVSContext {
     int skip_mode_flag; ///< select between skip_count or one skip_flag per MB
     int loop_filter_disable;
     int alpha_offset, beta_offset;
-    int ref_flag;
+    int ref_flag; ///< If set means all MBs use default reference pictures
     int aec_enable;
     int mbx, mby, mbidx; ///< macroblock coordinates
     int flags;         ///< availability flags of neighbouring macroblocks
@@ -239,6 +242,7 @@ typedef struct AVSContext {
     */
     int pred_mode_C_A;
     int pred_mode_C_B;
+    int chroma_pred;
     int *top_pred_Y;
     int *top_pred_C;
 
@@ -250,6 +254,7 @@ typedef struct AVSContext {
     int qp;
     int qp_fixed;
     int qp_delta_last;
+    int qp_delta;
     int pic_qp_fixed;
     int cbp;
     int tcbp;
@@ -287,6 +292,7 @@ extern const cavs_vector ff_cavs_dir_mv;
 static inline void set_mvs(cavs_vector *mv, enum cavs_block size) {
     switch(size) {
     case BLK_16X16:
+        mv[1] = mv[0];
         mv[MV_STRIDE  ] = mv[0];
         mv[MV_STRIDE+1] = mv[0];
     case BLK_16X8:

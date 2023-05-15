@@ -20,6 +20,32 @@
  */
 #include "cavs_aec_symbols.h"
 
+int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int refB) {
+    int ctx;
+    int symbol = 0;
+    if(refA > 0)
+        refA = 1;
+    else
+        refA = 0;
+    if(refB > 0)
+        refB = 1;
+    else   
+        refB = 0;
+    ctx = refA + 2 * refB;
+    while(!aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_REFERENCE_INDEX + ctx], NULL, false)) {
+        symbol++;
+        if(symbol == 1)
+            ctx = 4;
+        else
+            ctx = 5;
+        if(symbol == 3)
+            break;
+    }
+    aec_log(&aec->aecdec, "ref_frame", symbol);
+    //aec_log(&aec->aecdec, "ref_frameA", refA);
+    //aec_log(&aec->aecdec, "ref_frameB", refB);
+    return symbol;
+}
 
 int cavs_aec_read_mv_diff(Aec *aec, GetBitContext *gb, int base_ctx, int mvda) {
     int ctx = 0;
@@ -29,6 +55,8 @@ int cavs_aec_read_mv_diff(Aec *aec, GetBitContext *gb, int base_ctx, int mvda) {
         ctx = 1;
     if (mvda > 15)
         ctx = 2;
+    //aec_log(&aec->aecdec, "mvda", mvda);
+    //aec_log(&aec->aecdec, "ctx", ctx);
     if (!aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[base_ctx + ctx], NULL, false))
         value = 0;
     else if (!aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[base_ctx + 3], NULL, false))

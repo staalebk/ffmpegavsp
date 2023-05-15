@@ -56,6 +56,7 @@ typedef struct Aec {
 } Aec;
 
 
+int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int refB);
 int cavs_aec_read_mv_diff(Aec *aec, GetBitContext *gb, int base_ctx, int mvda);
 //int cavs_aec_read_skip_run(Aec *aec, GetBitContext *gb, int base_ctx);
 int cavs_aec_read_intra_luma_pred_mode(Aec *aec, GetBitContext *gb, int predpred);

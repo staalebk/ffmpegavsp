@@ -80,6 +80,7 @@ static int cavsvideo_parse(AVCodecParserContext *s,
 {
     ParseContext *pc = s->priv_data;
     int next;
+    printf("Enter parse\n");
 
     if(s->flags & PARSER_FLAG_COMPLETE_FRAMES){
         next= buf_size;
@@ -94,6 +95,7 @@ static int cavsvideo_parse(AVCodecParserContext *s,
     }
     *poutbuf = buf;
     *poutbuf_size = buf_size;
+    printf("Exit parse\n");
     return next;
 }
 

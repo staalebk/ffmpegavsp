@@ -47,6 +47,7 @@ typedef struct AecDec {
     bool initialized;
     FILE *f; // TODO: Remove, this was used for debugging
     bool debug; // TODO: Remove
+    int dframe; //TODO: Remove
 } AecDec;
 
 void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb);

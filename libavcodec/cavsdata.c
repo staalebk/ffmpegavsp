@@ -63,7 +63,7 @@ const uint8_t ff_cavs_chroma_qp[64] = {
 
 /** mark block as "no prediction from this direction"
     e.g. forward motion vector in BWD partition */
-const cavs_vector ff_cavs_dir_mv   = {0,0,1,REF_DIR};
+const cavs_vector ff_cavs_dir_mv   = {0,0,1,NOT_AVAIL, REF_DIR};
 
 /** mark block as using intra prediction */
-const cavs_vector ff_cavs_intra_mv = {0,0,1,REF_INTRA};
+const cavs_vector ff_cavs_intra_mv = {0,0,1,NOT_AVAIL, REF_INTRA};
