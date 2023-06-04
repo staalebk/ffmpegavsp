@@ -164,8 +164,8 @@ DECLARE_ALIGNED(8, typedef, struct) {
     int16_t dist;
     int16_t ref;
     int8_t direction;
-    //int16_t dx;
-    //int16_t dy;
+    //int8_t fill;
+    //int8_t fill2;
 } cavs_vector;
 
 struct dec_2dvlc {
@@ -260,6 +260,8 @@ typedef struct AVSContext {
     int tcbp;
     int lcbp;
     int *top_cbp;
+    int mb_type;
+    int *top_mb_type;
     uint8_t permutated_scantable[64];
 
     /** intra prediction is done with un-deblocked samples

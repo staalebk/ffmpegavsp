@@ -59,6 +59,7 @@ void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb) {
     if(aecdec->f != NULL)
         fclose(aecdec->f);
     snprintf(filename, 49, "dbg%d.txt", aecdec->dframe++);
+    printf("DEBUG ------------- DEBUG -------------- DEBUG ---------- %s\n", filename);
     aecdec->f = fopen(filename, "w");
     aecdec->debug = true;
     
@@ -289,7 +290,7 @@ int aec_decode_stuffing_bit(AecDec *aecdec, GetBitContext *gb, bool dbg) {
     int tRlps;
     dbg = aecdec->debug;
     if(aecdec->debug) {
-        fprintf(aecdec->f, "ctx: %d %d \taec: %d %d %d %d\n", lgPmps, 0, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
+        fprintf(aecdec->f, "ssssctx: %d %d \taec: %d %d %d %d\n", lgPmps, 0, aecdec->rS1, aecdec->rT1, aecdec->valueS, aecdec->valueT);
     }
 
     if ( aecdec->rT1 >= (lgPmps >> 2) ) {

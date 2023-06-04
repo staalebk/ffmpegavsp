@@ -90,12 +90,13 @@ static int cavsvideo_parse(AVCodecParserContext *s,
         if (ff_combine_frame(pc, next, &buf, &buf_size) < 0) {
             *poutbuf = NULL;
             *poutbuf_size = 0;
+            printf("Exit parse combine fail?\n");
             return buf_size;
         }
     }
     *poutbuf = buf;
     *poutbuf_size = buf_size;
-    printf("Exit parse\n");
+    printf("Exit parse regular\n");
     return next;
 }
 

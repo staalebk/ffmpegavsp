@@ -47,6 +47,49 @@ int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int 
     return symbol;
 }
 
+int cavs_aec_read_mb_reference_index_b(Aec *aec, GetBitContext *gb, int refA, int refB) {
+    int ctx;
+    int symbol = 0;
+    // TODO: Remove
+    if(refA == -1)
+        refA = 0;
+    if(refB == -1)
+        refB = 0;
+    aec_log(&aec->aecdec, "refA", refA);
+    aec_log(&aec->aecdec, "refB", refB);
+    if(refA > 0)
+        refA = 1;
+    else
+        refA = 0;
+    if(refB > 0)
+        refB = 1;
+    else   
+        refB = 0;
+    ctx = refA + 2 * refB;
+    symbol = aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_REFERENCE_INDEX + ctx], NULL, false);
+    if(symbol)
+        symbol = 0;
+    else
+        symbol = 1;
+    aec_log(&aec->aecdec, "ref_frame", symbol);
+    //aec_log(&aec->aecdec, "ref_frameA", refA);
+    //aec_log(&aec->aecdec, "ref_frameB", refB);
+    return symbol;
+}
+
+int cavs_aec_read_mb_skip_run(Aec *aec, GetBitContext *gb) {
+    int symbol = 0;
+    int ctx = 0;
+    while(!aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_SKIP_RUN+ctx], NULL, false)) {
+        symbol++;
+        ctx++;
+        if(ctx > 3)
+            ctx = 3;
+    }
+    aec_log(&aec->aecdec, "mb_skip_run", symbol);
+    return symbol;
+}
+
 int cavs_aec_read_mv_diff(Aec *aec, GetBitContext *gb, int base_ctx, int mvda) {
     int ctx = 0;
     int value = 0;

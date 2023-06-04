@@ -891,7 +891,7 @@ static inline void set_intra_mode_default(AVSContext *h)
     h->pred_mode_C_A = INTRA_C_LP;
 }
 
-static int get_ref(AVSContext *h, enum cavs_mv_loc nP)
+static int get_ref(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_direction direction)
 {
     int refA = 0;
     int refB = 0;
@@ -907,11 +907,36 @@ static int get_ref(AVSContext *h, enum cavs_mv_loc nP)
 
         ref = h->ref_flag ? 0 : cavs_aec_read_mb_reference_index(&h->aec, &h->gb, refA, refB);
         mvP->ref = ref;
+        mvP->direction = direction;
         return ref;
     } else {
         return h->ref_flag ? 0 : get_bits1(gb);
     }
 }
+
+static int get_ref_b(AVSContext *h, enum cavs_mv_loc nP, int def, enum cavs_mv_direction direction)
+{
+    int refA = 0;
+    int refB = 0;
+    int ref;
+    GetBitContext *gb = &h->gb;
+
+    if (h->aec_enable) {
+        cavs_vector *mvP = &h->mv[nP];
+        cavs_vector *mvA = &h->mv[nP-1];
+        cavs_vector *mvB = &h->mv[nP-4];
+        refA = mvA->ref;
+        refB = mvB->ref;
+
+        ref = h->ref_flag ? 0 : cavs_aec_read_mb_reference_index_b(&h->aec, &h->gb, refA, refB);
+        mvP->ref = ref;
+        mvP->direction = direction;
+        return ref;
+    } else {
+        return h->ref_flag ? 0 : get_bits1(gb);
+    }
+}
+
 
 static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
 {
@@ -928,33 +953,33 @@ static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_PSKIP,  BLK_16X16, 0);
         break;
     case P_16X16:
-        ref[0] = get_ref(h, MV_FWD_X0);
+        ref[0] = get_ref(h, MV_FWD_X0, MV_FWD);
         h->mv[MV_FWD_X1].ref = ref[0];
         h->mv[MV_FWD_X2].ref = ref[0];
         h->mv[MV_FWD_X3].ref = ref[0];
         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_MEDIAN, BLK_16X16, ref[0]);
         break;
     case P_16X8:
-        ref[0] = get_ref(h, MV_FWD_X0);
-        ref[2] = get_ref(h, MV_FWD_X2);
+        ref[0] = get_ref(h, MV_FWD_X0, MV_FWD);
+        ref[2] = get_ref(h, MV_FWD_X2, MV_FWD);
         h->mv[MV_FWD_X1].ref = ref[0];
         h->mv[MV_FWD_X3].ref = ref[2];
         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_TOP,    BLK_16X8, ref[0]);
         ff_cavs_mv(h, MV_FWD_X2, MV_FWD_A1, MV_PRED_LEFT,   BLK_16X8, ref[2]);
         break;
     case P_8X16:
-        ref[0] = get_ref(h, MV_FWD_X0);
-        ref[1] = get_ref(h, MV_FWD_X1);
+        ref[0] = get_ref(h, MV_FWD_X0, MV_FWD);
+        ref[1] = get_ref(h, MV_FWD_X1, MV_FWD);
         h->mv[MV_FWD_X2].ref = ref[0];
         h->mv[MV_FWD_X3].ref = ref[1];
         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_B3, MV_PRED_LEFT,     BLK_8X16, ref[0]);
         ff_cavs_mv(h, MV_FWD_X1, MV_FWD_C2, MV_PRED_TOPRIGHT, BLK_8X16, ref[1]);
         break;
     case P_8X8:
-        ref[0] = get_ref(h, MV_FWD_X0);
-        ref[1] = get_ref(h, MV_FWD_X1);
-        ref[2] = get_ref(h, MV_FWD_X2);
-        ref[3] = get_ref(h, MV_FWD_X3);
+        ref[0] = get_ref(h, MV_FWD_X0, MV_FWD);
+        ref[1] = get_ref(h, MV_FWD_X1, MV_FWD);
+        ref[2] = get_ref(h, MV_FWD_X2, MV_FWD);
+        ref[3] = get_ref(h, MV_FWD_X3, MV_FWD);
         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_B3, MV_PRED_MEDIAN,   BLK_8X8, ref[0]);
         ff_cavs_mv(h, MV_FWD_X1, MV_FWD_C2, MV_PRED_MEDIAN,   BLK_8X8, ref[1]);
         ff_cavs_mv(h, MV_FWD_X2, MV_FWD_X1, MV_PRED_MEDIAN,   BLK_8X8, ref[2]);
@@ -971,6 +996,7 @@ static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
 
 static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
 {
+    int ref[4];
     int block;
     enum cavs_sub_mb sub_type[4];
     int flags;
@@ -993,22 +1019,70 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
             for (block = 0; block < 4; block++)
                 mv_pred_direct(h, &h->mv[mv_scan[block]],
                                &h->col_mv[h->mbidx * 4 + block]);
+        h->mv[MV_FWD_X0].ref = 0;
+        h->mv[MV_FWD_X1].ref = 0;
+        h->mv[MV_FWD_X2].ref = 0;
+        h->mv[MV_FWD_X3].ref = 0;
         break;
     case B_FWD_16X16:
-        ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_MEDIAN, BLK_16X16, 1);
+        ref[0] = get_ref_b(h, MV_FWD_X0, 1, MV_FWD);
+        h->mv[MV_FWD_X1].ref = ref[0];
+        h->mv[MV_FWD_X2].ref = ref[0];
+        h->mv[MV_FWD_X3].ref = ref[0];
+        ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_MEDIAN, BLK_16X16, ref[0]);
         break;
     case B_SYM_16X16:
-        ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_MEDIAN, BLK_16X16, 1);
+        ref[0] = get_ref_b(h, MV_FWD_X0, 1, MV_FWD);
+        h->mv[MV_FWD_X1].ref = ref[0];
+        h->mv[MV_FWD_X2].ref = ref[0];
+        h->mv[MV_FWD_X3].ref = ref[0];
+        ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_MEDIAN, BLK_16X16, ref[0]);
         mv_pred_sym(h, &h->mv[MV_FWD_X0], BLK_16X16);
         break;
     case B_BWD_16X16:
-        ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_MEDIAN, BLK_16X16, 0);
+        ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
+        h->mv[MV_BWD_X1].ref = ref[0];
+        h->mv[MV_BWD_X2].ref = ref[0];
+        h->mv[MV_BWD_X3].ref = ref[0];
+        ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_MEDIAN, BLK_16X16, ref[0]);
         break;
     case B_8X8:
 #define TMP_UNUSED_INX  7
         flags = 0;
-        for (block = 0; block < 4; block++)
-            sub_type[block] = get_bits(&h->gb, 2);
+        for (block = 0; block < 4; block++) {
+            if(!h->aec_enable) {
+                sub_type[block] = get_bits(&h->gb, 2);
+            } else {
+                int symbol = 0;
+                symbol = aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_PART_TYPE], NULL, false) << 1;
+                if (symbol)
+                    symbol |= aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_PART_TYPE + 1], NULL, false);
+                else
+                    symbol |= aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_PART_TYPE + 2], NULL, false);
+                aec_log(&h->aec.aecdec, "mb_part_type", symbol);
+                sub_type[block] = symbol;
+            }
+        }
+        if (sub_type[0] != B_SUB_DIRECT)
+            if (sub_type[0] != B_SUB_BWD)
+                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
+            else
+                ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
+        if (sub_type[1] != B_SUB_DIRECT)
+            if (sub_type[1] != B_SUB_BWD)
+                ref[1] = get_ref_b(h, MV_FWD_X1, 0, MV_FWD);
+            else
+                ref[1] = get_ref_b(h, MV_BWD_X1, 0, MV_BWD);
+        if (sub_type[2] != B_SUB_DIRECT)
+            if (sub_type[2] != B_SUB_BWD)
+                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);
+            else
+                ref[2] = get_ref_b(h, MV_BWD_X2, 0, MV_BWD);
+        if (sub_type[3] != B_SUB_DIRECT)
+            if (sub_type[3] != B_SUB_BWD)
+                ref[3] = get_ref_b(h, MV_FWD_X3, 0, MV_FWD);
+            else
+                ref[3] = get_ref_b(h, MV_BWD_X3, 0, MV_BWD);
         for (block = 0; block < 4; block++) {
             switch (sub_type[block]) {
             case B_SUB_DIRECT:
@@ -1069,35 +1143,70 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
         av_assert2(mb_type < B_8X8);
         flags = ff_cavs_partition_flags[mb_type];
         if (mb_type & 1) { /* 16x8 macroblock types */
+            if (flags & BWD0) {
+                ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
+                h->mv[MV_BWD_X1].ref = ref[0];
+            } else {
+                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
+                h->mv[MV_FWD_X1].ref = ref[0];
+            }
+            if (flags & BWD1) {
+                ref[2] = get_ref_b(h, MV_BWD_X2, 0, MV_BWD);
+                h->mv[MV_BWD_X3].ref = ref[2];
+            } else {
+                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);
+                h->mv[MV_FWD_X3].ref = ref[2];
+            }
             if (flags & FWD0)
-                ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_TOP,  BLK_16X8, 1);
+                ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_TOP,  BLK_16X8, ref[0]);
             if (flags & SYM0)
                 mv_pred_sym(h, &h->mv[MV_FWD_X0], BLK_16X8);
             if (flags & FWD1)
-                ff_cavs_mv(h, MV_FWD_X2, MV_FWD_A1, MV_PRED_LEFT, BLK_16X8, 1);
+                ff_cavs_mv(h, MV_FWD_X2, MV_FWD_A1, MV_PRED_LEFT, BLK_16X8, ref[1]);
             if (flags & SYM1)
                 mv_pred_sym(h, &h->mv[MV_FWD_X2], BLK_16X8);
             if (flags & BWD0)
-                ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_TOP,  BLK_16X8, 0);
+                ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_TOP,  BLK_16X8, ref[0]);
             if (flags & BWD1)
-                ff_cavs_mv(h, MV_BWD_X2, MV_BWD_A1, MV_PRED_LEFT, BLK_16X8, 0);
+                ff_cavs_mv(h, MV_BWD_X2, MV_BWD_A1, MV_PRED_LEFT, BLK_16X8, ref[1]);
         } else {          /* 8x16 macroblock types */
+            if (flags & BWD0) {
+                ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
+                h->mv[MV_BWD_X2].ref = ref[0];
+            } else {
+                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
+                h->mv[MV_FWD_X2].ref = ref[0];
+            }
+            if (flags & BWD1) {
+                ref[1] = get_ref_b(h, MV_BWD_X1, 0, MV_BWD);
+                h->mv[MV_BWD_X3].ref = ref[1];
+            } else {
+                ref[1] = get_ref_b(h, MV_FWD_X1, 0, MV_FWD);
+                h->mv[MV_FWD_X3].ref = ref[1];
+            }
             if (flags & FWD0)
-                ff_cavs_mv(h, MV_FWD_X0, MV_FWD_B3, MV_PRED_LEFT, BLK_8X16, 1);
+                ff_cavs_mv(h, MV_FWD_X0, MV_FWD_B3, MV_PRED_LEFT, BLK_8X16, ref[0]);
             if (flags & SYM0)
                 mv_pred_sym(h, &h->mv[MV_FWD_X0], BLK_8X16);
             if (flags & FWD1)
-                ff_cavs_mv(h, MV_FWD_X1, MV_FWD_C2, MV_PRED_TOPRIGHT, BLK_8X16, 1);
+                ff_cavs_mv(h, MV_FWD_X1, MV_FWD_C2, MV_PRED_TOPRIGHT, BLK_8X16, ref[1]);
             if (flags & SYM1)
                 mv_pred_sym(h, &h->mv[MV_FWD_X1], BLK_8X16);
             if (flags & BWD0)
-                ff_cavs_mv(h, MV_BWD_X0, MV_BWD_B3, MV_PRED_LEFT, BLK_8X16, 0);
+                ff_cavs_mv(h, MV_BWD_X0, MV_BWD_B3, MV_PRED_LEFT, BLK_8X16, ref[0]);
             if (flags & BWD1)
-                ff_cavs_mv(h, MV_BWD_X1, MV_BWD_C2, MV_PRED_TOPRIGHT, BLK_8X16, 0);
+                ff_cavs_mv(h, MV_BWD_X1, MV_BWD_C2, MV_PRED_TOPRIGHT, BLK_8X16, ref[1]);
         }
     }
     ff_cavs_inter(h, mb_type);
     set_intra_mode_default(h);
+    if (mb_type == B_SKIP) {
+        h->mv[MV_FWD_X0].ref = -1;
+        h->mv[MV_FWD_X1].ref = -1;
+        h->mv[MV_FWD_X2].ref = -1;
+        h->mv[MV_FWD_X3].ref = -1;
+    }
+    store_mvs(h);
     if (mb_type != B_SKIP)
         decode_residual_inter(h);
     ff_cavs_filter(h, mb_type);
@@ -1229,7 +1338,6 @@ static inline int check_for_slice(AVSContext *h)
 
 static int decode_pic(AVSContext *h)
 {
-    int align;
     int ret;
     int ref = 0;
     int fields = 1;
@@ -1298,7 +1406,7 @@ static int decode_pic(AVSContext *h)
         h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
         ref++;
         if(h->pic_structure) {
-            h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
+            h->dist[ref] = (h->cur.poc - h->DPB[ref].poc ) & 511;
             ref++;
         }
     } else {
@@ -1419,18 +1527,9 @@ static int decode_pic(AVSContext *h)
                     if(!h->aec_enable) {
                         skip_count = get_ue_golomb(&h->gb);
                     } else {
-                        
-                        int symbol = 0;
-                        int ctx = 0;
-                        while(!aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_SKIP_RUN+ctx], NULL, false)) {
-                            symbol++;
-                            ctx++;
-                            if(ctx > 3)
-                                ctx = 3;
-                        }
-                        skip_count = symbol;
-                        aec_log(&h->aec.aecdec, "mb_skip_run", symbol);
-                        //printf("Skipping: %d\n", symbol);
+                        int read_stuffing = 0;
+                        skip_count = cavs_aec_read_mb_skip_run(&h->aec, &h->gb);
+                        read_stuffing = skip_count;
                         ret = 1;
                         while(skip_count--){
                             decode_mb_p(h, P_SKIP);
@@ -1445,7 +1544,7 @@ static int decode_pic(AVSContext *h)
                             printf("boboo\n");
                             break;
                         }
-                        if (symbol) {
+                        if (read_stuffing) {
                             if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
                                 printf("stuffing is 1\n");
                         }
@@ -1499,31 +1598,72 @@ static int decode_pic(AVSContext *h)
                         ret = AVERROR_INVALIDDATA;
                         break;
                     }
-                    //printf("mb_skip_run\n");
-                    skip_count = get_ue_golomb(&h->gb);
+                    if(!h->aec_enable) {
+                        skip_count = get_ue_golomb(&h->gb);
+                    } else {
+                        int read_stuffing = 0;
+                        skip_count = cavs_aec_read_mb_skip_run(&h->aec, &h->gb);
+                        read_stuffing = skip_count;
+                        ret = 1;
+                        while(skip_count--){
+                            h->mb_type = B_SKIP;
+                            decode_mb_b(h, B_SKIP);
+                            ret = ff_cavs_next_mb(h);
+                            if(!ret) {
+                                printf("booB0\n");
+                                break;
+                            }
+                        }
+                        if (read_stuffing) {
+                            if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
+                                printf("stuffing is 1\n");
+                        }
+                    }
                 }
-                if (h->skip_mode_flag && skip_count--) {
-                    ret = decode_mb_b(h, B_SKIP);
-                } else {
+                //if (h->skip_mode_flag && skip_count--) {
+                //    ret = decode_mb_b(h, B_SKIP);
+                //} else {
                     if (get_bits_left(&h->gb) < 1) {
                         ret = AVERROR_INVALIDDATA;
                         break;
                     }
-                    mb_type = get_ue_golomb(&h->gb) + B_SKIP + h->skip_mode_flag;
+                    if(!h->aec_enable) {
+                        mb_type = get_ue_golomb(&h->gb) + B_SKIP + h->skip_mode_flag;
+                    } else {
+                        int symbol = 0;
+                        int ctx = 0;
+                        int a = 0;
+                        int b = 0;
+                        if (h->flags & A_AVAIL && h->mb_type != P_SKIP && h->mb_type != B_SKIP && h->mb_type != B_DIRECT)
+                            a = 1;
+                        if (h->flags & B_AVAIL && h->top_mb_type[h->mbx] != P_SKIP && h->top_mb_type[h->mbx] != B_SKIP && h->top_mb_type[h->mbx] != B_DIRECT)
+                            b = 1;
+                        ctx = 5 + a + b;
+                        symbol = aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_TYPE+ctx], NULL, false);
+                        ctx = 8;
+                        while(symbol && !aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_TYPE+ctx], NULL, false)) {
+                            symbol++;
+                            ctx++;
+                            if(ctx > 14)
+                                ctx = 14;
+                        }
+                        mb_type = symbol + h->skip_mode_flag;
+                        h->mb_type = mb_type;
+                        mb_type += B_SKIP;
+                        //printf("mb_type: %d\n", mb_type);
+                        aec_log(&h->aec.aecdec, "mb_type", symbol);
+                        
+                    }
                     if (mb_type > B_8X8)
                         ret = decode_mb_i(h, mb_type - B_8X8 - 1);
                     else
                         ret = decode_mb_b(h, mb_type);
-                }
-                // Re-Align stuff for aec:
-                if(h->aec_enable) {
-                    align = (-get_bits_count(&h->gb)) & 7;
-                    //int off = get_bits_count(gb);
-                    //printf("A Offset: %d\n", align);
-                    //printf("A bitcontext: %d\n", h->gb.size_in_bits);
-                    align = get_bits(&h->gb, align);
-                    //printf("A Bits: %d\n", align);
-                }
+                //}
+            
+                        if(h->aec_enable) {
+                            if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
+                                printf("stuffing...\n");
+                        }
                 if (ret < 0)
                     break;
             } while (ff_cavs_next_mb(h));
@@ -1554,9 +1694,12 @@ static int decode_pic(AVSContext *h)
     emms_c();
     if (ret >= 0 && h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
         if(!h->progressive) {
-            ret = ff_get_buffer(h->avctx, h->combined.f, AV_GET_BUFFER_FLAG_REF);
-            if (ret < 0)
-                return ret;
+            if(h->combined.f->data[0] == NULL) {
+                ret = ff_get_buffer(h->avctx, h->combined.f, AV_GET_BUFFER_FLAG_REF);
+                if (ret < 0)
+                    return ret;
+            }
+            h->combined.f->pict_type = h->DPB[0].f->pict_type;
             for(int y = 0; y < h->avctx->height; y+=2) {
                 memcpy(h->combined.f->data[0] + ((y + 0) * h->l_stride), h->DPB[0].f->data[0] + y/2 * h->l_stride, h->l_stride);
                 memcpy(h->combined.f->data[0] + ((y + 1) * h->l_stride), h->cur.f->data[0] + y/2 * h->l_stride   , h->l_stride);
@@ -1576,6 +1719,7 @@ static int decode_pic(AVSContext *h)
         FFSWAP(AVSFrame, h->DPB[2], h->DPB[3]);
         FFSWAP(AVSFrame, h->DPB[1], h->DPB[2]);
         FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
+        printf("Deinterlacing and bufferstuff done\n");
     }
     return ret;
 }
@@ -1680,7 +1824,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             *got_frame = 1;
             av_frame_move_ref(rframe, h->DPB[0].f);
         }
-        printf("cavs_decode_frame return: 0 ----\n");
+        printf("---------------------------- cavs_decode_frame return: 0 ----\n");
         return 0;
     }
 
@@ -1695,7 +1839,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             printf("bzzz Start code: 0x%04x\n", stc & 0xFF);
             if (!h->stc)
                 av_log(h->avctx, AV_LOG_WARNING, "no frame decoded\n");
-            printf("cavs_decode_frame return: %ld\n", buf_ptr - buf);
+            printf("------------------------------- cavs_decode_frame return: %ld\n", buf_ptr - buf);
             return FFMAX(0, buf_ptr - buf);
         }
         input_size = (buf_end - buf_ptr) * 8;
@@ -1715,9 +1859,10 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                 h->got_keyframe = 1;
             }
         case PIC_PB_START_CODE:
+            av_frame_unref(h->combined.f);
             if (frame_start > 1) {
                 printf("invalid data\n");
-                printf("cavs_decode_frame return: %d :(\n", AVERROR_INVALIDDATA);
+                printf("--------------------------------- cavs_decode_frame return: %d :(\n", AVERROR_INVALIDDATA);
                 return AVERROR_INVALIDDATA;
             }
             frame_start ++;
@@ -1753,9 +1898,10 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                     //buf_ptr = avpriv_find_start_code(buf_ptr, buf_end, &stc);
                     //if ((ret = av_frame_ref(rframe, h->DPB[!h->low_delay].f)) < 0)
                     if ((ret = av_frame_ref(rframe, h->combined.f)) < 0) {
-                        printf("cavs_decode_frame return: %d  :/\n", ret);
+                        printf("-------------------------- cavs_decode_frame return: %d  :/\n", ret);
                         return ret;
                     }
+                    printf("combined should be combined\n");
                 } else {
                     *got_frame = 0;
                 }

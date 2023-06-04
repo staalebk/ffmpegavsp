@@ -620,12 +620,12 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
         } else {
             int mvdax = 0;
             int mvday = 0;
-            if (mvA->ref != NOT_AVAIL) {
+            if (mvA->ref != NOT_AVAIL && mvP->direction == mvA->direction) {
                 mvdax = abs(mvA->x);
                 mvday = abs(mvA->y);
             }
-            mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax); // + (unsigned)mvP->x;
-            my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday); // + (unsigned)mvP->y;
+            mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax); //+ (unsigned)mvP->x;
+            my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday); //+ (unsigned)mvP->y;
             //printf("GEEK %d %d %d %d\n", mvdax, mvday, mx, my);
         }
 
@@ -721,6 +721,9 @@ int ff_cavs_next_mb(AVSContext *h)
     h->qp_delta_last = h->qp_delta;
     h->qp_delta = 0;
 
+    /* Copy mb_type cache*/
+    h->top_mb_type[h->mbx] = h->mb_type;
+
     /* copy Chroma Pred to top line */
     h->top_pred_C[h->mbx] = h->chroma_pred;
     h->chroma_pred = 0;
@@ -803,6 +806,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
     h->top_pred_Y   = av_calloc(h->mb_width * 2,  sizeof(*h->top_pred_Y));
     h->top_pred_C   = av_calloc(h->mb_width,  sizeof(*h->top_pred_C));
     h->top_cbp      = av_calloc(h->mb_width,  sizeof(*h->top_cbp));
+    h->top_mb_type  = av_calloc(h->mb_width,  sizeof(*h->top_mb_type));
     h->nz_coeff     = av_calloc(h->mb_width,  sizeof(*h->nz_coeff));
     h->top_border_y = av_calloc(h->mb_width + 1,  16);
     h->top_border_u = av_calloc(h->mb_width,  10);
@@ -817,13 +821,14 @@ int ff_cavs_init_top_lines(AVSContext *h)
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
         !h->top_border_y || !h->top_border_u || !h->top_border_v ||
         !h->col_mv || !h->col_type_base || !h->block || !h->top_pred_C || 
-        !h->nz_coeff || !h->top_cbp) {
+        !h->nz_coeff || !h->top_cbp || !h->top_mb_type) {
         av_freep(&h->top_qp);
         av_freep(&h->top_mv[0]);
         av_freep(&h->top_mv[1]);
         av_freep(&h->top_pred_Y);
         av_freep(&h->top_pred_C);
         av_freep(&h->top_cbp);
+        av_freep(&h->top_mb_type);
         av_freep(&h->nz_coeff);
         av_freep(&h->top_border_y);
         av_freep(&h->top_border_u);
@@ -911,6 +916,7 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
     av_freep(&h->top_pred_Y);
     av_freep(&h->top_pred_C);
     av_freep(&h->top_cbp);
+    av_freep(&h->top_mb_type);
     av_freep(&h->nz_coeff);
     av_freep(&h->top_border_y);
     av_freep(&h->top_border_u);
