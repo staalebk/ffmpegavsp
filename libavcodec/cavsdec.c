@@ -1063,26 +1063,16 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                 sub_type[block] = symbol;
             }
         }
-        if (sub_type[0] != B_SUB_DIRECT)
-            if (sub_type[0] != B_SUB_BWD)
-                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
-        if (sub_type[1] != B_SUB_DIRECT)
-            if (sub_type[1] != B_SUB_BWD)
-                ref[1] = get_ref_b(h, MV_FWD_X1, 0, MV_FWD);
-        if (sub_type[2] != B_SUB_DIRECT)
-            if (sub_type[2] != B_SUB_BWD)
-                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);
-        if (sub_type[3] != B_SUB_DIRECT)
-            if (sub_type[3] != B_SUB_BWD)
-                ref[3] = get_ref_b(h, MV_FWD_X3, 0, MV_FWD);
-        if (sub_type[0] == B_SUB_BWD)
-            ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
-        if (sub_type[1] == B_SUB_BWD)
-            ref[1] = get_ref_b(h, MV_BWD_X1, 0, MV_BWD);
-        if (sub_type[2] == B_SUB_BWD)
-            ref[2] = get_ref_b(h, MV_BWD_X2, 0, MV_BWD);
-        if (sub_type[3] == B_SUB_BWD)
-            ref[3] = get_ref_b(h, MV_BWD_X3, 0, MV_BWD);
+        for (block = 0; block < 4; block++)
+            if (sub_type[block] == B_SUB_FWD || sub_type[block] == B_SUB_SYM) { 
+                    ref[block] = get_ref_b(h, mv_scan[block], 0, MV_FWD);
+                    h->mv[mv_scan[block]].ref = ref[block];
+                    h->mv[mv_scan[block] + MV_BWD_OFFS].ref = -1;
+            }
+        for (block = 0; block < 4; block++)
+            if (sub_type[block] == B_SUB_BWD)
+                ref[block] = get_ref_b(h, mv_scan[block] + MV_BWD_OFFS, 0, MV_BWD);
+
         for (block = 0; block < 4; block++) {
             switch (sub_type[block]) {
             case B_SUB_DIRECT:
@@ -1120,11 +1110,11 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                 break;
             case B_SUB_FWD:
                 ff_cavs_mv(h, mv_scan[block], mv_scan[block] - 3,
-                           MV_PRED_MEDIAN, BLK_8X8, 1);
+                           MV_PRED_MEDIAN, BLK_8X8, ref[block]);
                 break;
             case B_SUB_SYM:
                 ff_cavs_mv(h, mv_scan[block], mv_scan[block] - 3,
-                           MV_PRED_MEDIAN, BLK_8X8, 1);
+                           MV_PRED_MEDIAN, BLK_8X8, ref[block]);
                 mv_pred_sym(h, &h->mv[mv_scan[block]], BLK_8X8);
                 break;
             }
@@ -1134,10 +1124,11 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
 #undef TMP_UNUSED_INX
 
         for (block = 0; block < 4; block++) {
-            if (sub_type[block] == B_SUB_BWD)
+            if (sub_type[block] == B_SUB_BWD) {
                 ff_cavs_mv(h, mv_scan[block] + MV_BWD_OFFS,
                            mv_scan[block] + MV_BWD_OFFS - 3,
-                           MV_PRED_MEDIAN, BLK_8X8, 0);
+                           MV_PRED_MEDIAN, BLK_8X8, ref[block]);
+            }
         }
         break;
     default:
@@ -1167,13 +1158,13 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
             if (flags & SYM0)
                 mv_pred_sym(h, &h->mv[MV_FWD_X0], BLK_16X8);
             if (flags & FWD1)
-                ff_cavs_mv(h, MV_FWD_X2, MV_FWD_A1, MV_PRED_LEFT, BLK_16X8, ref[1]);
+                ff_cavs_mv(h, MV_FWD_X2, MV_FWD_A1, MV_PRED_LEFT, BLK_16X8, ref[2]);
             if (flags & SYM1)
                 mv_pred_sym(h, &h->mv[MV_FWD_X2], BLK_16X8);
             if (flags & BWD0)
                 ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_TOP,  BLK_16X8, ref[0]);
             if (flags & BWD1)
-                ff_cavs_mv(h, MV_BWD_X2, MV_BWD_A1, MV_PRED_LEFT, BLK_16X8, ref[1]);
+                ff_cavs_mv(h, MV_BWD_X2, MV_BWD_A1, MV_PRED_LEFT, BLK_16X8, ref[2]);
         } else {          /* 8x16 macroblock types */
             if (flags & BWD0) {
                 ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);

@@ -41,7 +41,7 @@ int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int 
         if(symbol == 3)
             break;
     }
-    aec_log(&aec->aecdec, "ref_frame", symbol);
+    aec_log(&aec->aecdec, "reference_index", symbol);
     //aec_log(&aec->aecdec, "ref_frameA", refA);
     //aec_log(&aec->aecdec, "ref_frameB", refB);
     return symbol;
@@ -71,7 +71,7 @@ int cavs_aec_read_mb_reference_index_b(Aec *aec, GetBitContext *gb, int refA, in
         symbol = 0;
     else
         symbol = 1;
-    aec_log(&aec->aecdec, "ref_frame", symbol);
+    aec_log(&aec->aecdec, "reference_index", symbol);
     //aec_log(&aec->aecdec, "ref_frameA", refA);
     //aec_log(&aec->aecdec, "ref_frameB", refB);
     return symbol;
