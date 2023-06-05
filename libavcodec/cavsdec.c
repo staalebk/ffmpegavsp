@@ -1066,23 +1066,23 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
         if (sub_type[0] != B_SUB_DIRECT)
             if (sub_type[0] != B_SUB_BWD)
                 ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
-            else
-                ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
         if (sub_type[1] != B_SUB_DIRECT)
             if (sub_type[1] != B_SUB_BWD)
                 ref[1] = get_ref_b(h, MV_FWD_X1, 0, MV_FWD);
-            else
-                ref[1] = get_ref_b(h, MV_BWD_X1, 0, MV_BWD);
         if (sub_type[2] != B_SUB_DIRECT)
             if (sub_type[2] != B_SUB_BWD)
                 ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);
-            else
-                ref[2] = get_ref_b(h, MV_BWD_X2, 0, MV_BWD);
         if (sub_type[3] != B_SUB_DIRECT)
             if (sub_type[3] != B_SUB_BWD)
                 ref[3] = get_ref_b(h, MV_FWD_X3, 0, MV_FWD);
-            else
-                ref[3] = get_ref_b(h, MV_BWD_X3, 0, MV_BWD);
+        if (sub_type[0] == B_SUB_BWD)
+            ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
+        if (sub_type[1] == B_SUB_BWD)
+            ref[1] = get_ref_b(h, MV_BWD_X1, 0, MV_BWD);
+        if (sub_type[2] == B_SUB_BWD)
+            ref[2] = get_ref_b(h, MV_BWD_X2, 0, MV_BWD);
+        if (sub_type[3] == B_SUB_BWD)
+            ref[3] = get_ref_b(h, MV_BWD_X3, 0, MV_BWD);
         for (block = 0; block < 4; block++) {
             switch (sub_type[block]) {
             case B_SUB_DIRECT:
@@ -1115,6 +1115,8 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                 } else
                     mv_pred_direct(h, &h->mv[mv_scan[block]],
                                    &h->col_mv[h->mbidx * 4 + block]);
+                h->mv[mv_scan[block]].ref = 0;
+                h->mv[mv_scan[block] + MV_BWD_OFFS].ref = 0;
                 break;
             case B_SUB_FWD:
                 ff_cavs_mv(h, mv_scan[block], mv_scan[block] - 3,
@@ -1127,7 +1129,10 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                 break;
             }
         }
+        h->mv[TMP_UNUSED_INX] = ff_cavs_dir_mv;
+        h->mv[TMP_UNUSED_INX + MV_BWD_OFFS] = ff_cavs_dir_mv;
 #undef TMP_UNUSED_INX
+
         for (block = 0; block < 4; block++) {
             if (sub_type[block] == B_SUB_BWD)
                 ff_cavs_mv(h, mv_scan[block] + MV_BWD_OFFS,
@@ -1656,7 +1661,7 @@ static int decode_pic(AVSContext *h)
                     }
                     if (mb_type > B_8X8)
                         ret = decode_mb_i(h, mb_type - B_8X8 - 1);
-                    else
+                    else {
                         ret = decode_mb_b(h, mb_type);
                 //}
             
@@ -1664,6 +1669,7 @@ static int decode_pic(AVSContext *h)
                             if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
                                 printf("stuffing...\n");
                         }
+                    }
                 if (ret < 0)
                     break;
             } while (ff_cavs_next_mb(h));
