@@ -1139,18 +1139,20 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
         av_assert2(mb_type < B_8X8);
         flags = ff_cavs_partition_flags[mb_type];
         if (mb_type & 1) { /* 16x8 macroblock types */
+            if (flags & FWD0)
+                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
+            if (flags & FWD1)
+                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);            
             if (flags & BWD0) {
                 ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
                 h->mv[MV_BWD_X1].ref = ref[0];
             } else {
-                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
                 h->mv[MV_FWD_X1].ref = ref[0];
             }
             if (flags & BWD1) {
                 ref[2] = get_ref_b(h, MV_BWD_X2, 0, MV_BWD);
                 h->mv[MV_BWD_X3].ref = ref[2];
             } else {
-                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);
                 h->mv[MV_FWD_X3].ref = ref[2];
             }
             if (flags & FWD0)
@@ -1166,18 +1168,20 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
             if (flags & BWD1)
                 ff_cavs_mv(h, MV_BWD_X2, MV_BWD_A1, MV_PRED_LEFT, BLK_16X8, ref[2]);
         } else {          /* 8x16 macroblock types */
+            if (flags & FWD0)
+                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
+            if (flags & FWD1)
+                ref[1] = get_ref_b(h, MV_FWD_X1, 0, MV_FWD);
             if (flags & BWD0) {
                 ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
                 h->mv[MV_BWD_X2].ref = ref[0];
             } else {
-                ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
                 h->mv[MV_FWD_X2].ref = ref[0];
             }
             if (flags & BWD1) {
                 ref[1] = get_ref_b(h, MV_BWD_X1, 0, MV_BWD);
                 h->mv[MV_BWD_X3].ref = ref[1];
             } else {
-                ref[1] = get_ref_b(h, MV_FWD_X1, 0, MV_FWD);
                 h->mv[MV_FWD_X3].ref = ref[1];
             }
             if (flags & FWD0)
@@ -1644,9 +1648,12 @@ static int decode_pic(AVSContext *h)
                                 ctx = 14;
                         }
                         mb_type = symbol + h->skip_mode_flag;
-                        h->mb_type = mb_type;
                         mb_type += B_SKIP;
-                        //printf("mb_type: %d\n", mb_type);
+
+                        h->mb_type = mb_type;
+                        aec_log(&h->aec.aecdec, "mb_type A", a);
+
+                        aec_log(&h->aec.aecdec, "mb_type B", b);
                         aec_log(&h->aec.aecdec, "mb_type", symbol);
                         
                     }
