@@ -55,8 +55,8 @@ int cavs_aec_read_mb_reference_index_b(Aec *aec, GetBitContext *gb, int refA, in
         refA = 0;
     if(refB == -1)
         refB = 0;
-    aec_log(&aec->aecdec, "refA", refA);
-    aec_log(&aec->aecdec, "refB", refB);
+    //aec_log(&aec->aecdec, "refA", refA);
+    //aec_log(&aec->aecdec, "refB", refB);
     if(refA > 0)
         refA = 1;
     else

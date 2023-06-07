@@ -1142,7 +1142,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
             if (flags & FWD0)
                 ref[0] = get_ref_b(h, MV_FWD_X0, 0, MV_FWD);
             if (flags & FWD1)
-                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);            
+                ref[2] = get_ref_b(h, MV_FWD_X2, 0, MV_FWD);
             if (flags & BWD0) {
                 ref[0] = get_ref_b(h, MV_BWD_X0, 0, MV_BWD);
                 h->mv[MV_BWD_X1].ref = ref[0];
@@ -1614,6 +1614,10 @@ static int decode_pic(AVSContext *h)
                                 break;
                             }
                         }
+                        if(!ret) {
+                            printf("boboo\n");
+                            break;
+                        }
                         if (read_stuffing) {
                             if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
                                 printf("stuffing is 1\n");
@@ -1671,9 +1675,11 @@ static int decode_pic(AVSContext *h)
                 if (ret < 0)
                     break;
             } while (ff_cavs_next_mb(h));
+            printf("End of B-frame: %d\n", ret);
         }
         //if (!h->pic_structure && h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
         if (!h->pic_structure && fields > 1) {
+            int old_pic_type = h->cur.f->pict_type;
             printf("Here we go again!\n");
             get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
             skip_count = -1;
@@ -1686,7 +1692,10 @@ static int decode_pic(AVSContext *h)
             
             ff_get_buffer(h->avctx, h->cur.f, AV_GET_BUFFER_FLAG_REF);
             ret = ff_cavs_init_pic(h);
-            h->cur.f->pict_type = AV_PICTURE_TYPE_P;
+            printf("pict_type o_o: %d\n", old_pic_type);
+            h->cur.f->pict_type = old_pic_type;
+            if (old_pic_type == AV_PICTURE_TYPE_I)
+                h->cur.f->pict_type = AV_PICTURE_TYPE_P;
             h->cur.poc = h->DPB[0].poc + 1;
             printf("poc: %d\n", h->cur.poc);
             h->mby = 0;
