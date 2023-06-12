@@ -676,9 +676,9 @@ static int decode_residual_block(AVSContext *h, GetBitContext *gb,
             /*
             if (!esc_golomb_order)
                 level_buf[i] = 0;
-            */    
-            run_buf[i]   = run + 1; //TODO: +1 belongs in the dequant part according to spec, not sure why the original code is as it is.
-            
+            */
+            run_buf[i] = run + 1; //TODO: +1 belongs in the dequant part according to spec, not sure why the original code is as it is.
+
             pos += run + 1;
             if(pos >= 64)
                 pos = 63;
@@ -714,7 +714,7 @@ static inline int decode_residual_inter(AVSContext *h)
 {
     int block;
     int cbp;
-    
+
     /* get coded block pattern */
     if(!h->aec_enable) {
         cbp = get_ue_golomb(&h->gb);
@@ -733,9 +733,9 @@ static inline int decode_residual_inter(AVSContext *h)
 
     /* get quantizer */
     if (h->cbp && !h->qp_fixed) {
-        if(!h->aec_enable)
+        if(!h->aec_enable) {
             h->qp = (h->qp + (unsigned)get_se_golomb(&h->gb)) & 63;
-        else {
+        } else {
             h->qp_delta = cavs_aec_read_qp_delta(&h->aec, &h->gb, h->qp_delta_last);
             h->qp = (h->qp + h->qp_delta);
         }
@@ -780,12 +780,6 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
     ff_cavs_init_mb(h);
 
     /* get intra prediction modes from stream */
-    /*
-    if(h->mbidx == 4079)
-        aec_debug(&h->aec.aecdec, NULL, NULL);
-    */
-    //printf("--------MB %d ----------\n", h->mbidx);
-
     for (block = 0; block < 4; block++) {
         int nA, nB, predpred;
         int pos = scan3x3[block];
@@ -817,6 +811,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
         return AVERROR_INVALIDDATA;
     }
     ff_cavs_modify_mb_i(h, &pred_mode_uv);
+
     /* get coded block pattern */
     if(!h->aec_enable) {
         if (h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
@@ -863,6 +858,7 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
                                   h->left_border_u, h->c_stride);
     h->intra_pred_c[pred_mode_uv](h->cv, &h->top_border_v[h->mbx * 10],
                                   h->left_border_v, h->c_stride);
+
     ret = decode_residual_chroma(h);
     if (ret < 0)
         printf("BBQ?? Fixme fixme\n");
@@ -1002,6 +998,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
     int flags;
 
     ff_cavs_init_mb(h);
+
     /* reset all MVs */
     h->mv[MV_FWD_X0] = ff_cavs_dir_mv;
     set_mvs(&h->mv[MV_FWD_X0], BLK_16X16);
@@ -1058,7 +1055,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
             }
         }
         for (block = 0; block < 4; block++)
-            if (sub_type[block] == B_SUB_FWD || sub_type[block] == B_SUB_SYM) { 
+            if (sub_type[block] == B_SUB_FWD || sub_type[block] == B_SUB_SYM) {
                     ref[block] = get_ref_b(h, mv_scan[block], 0, MV_FWD);
                     h->mv[mv_scan[block]].ref = ref[block];
                     h->mv[mv_scan[block] + MV_BWD_OFFS].ref = -1;
@@ -1290,25 +1287,6 @@ static inline int check_for_slice(AVSContext *h)
     printf("Test: %d\n", show_bits_long(gb, 24 + 6) & 0xFFFFFF);
     */
     /* check for stuffing byte */
-
-    if(h->mby == 34) {
-        /*
-        for(int i=0; i < 64; i++)
-            printf("Bits1: %d\n", get_bits(gb, 1));
-        align = (-get_bits_count(gb)) & 7;
-        printf("align: %d\n ", align);
-  
-        align = (-get_bits_count(gb)) & 7;
-        printf("align: %d %d\n", align, show_bits_long(gb,32));
-        int stuffing = 1<<(7-(8-align));
-        printf("%d\n", show_bits(gb, 8));
-        if(stuffing == show_bits(gb, align))
-            printf("BING, DINO DNA!\n");
-        printf("blah: %d\n", get_bits(gb, align));
-        printf("align: %d %d\n", align, show_bits_long(gb,32));
-        exit(0);
-        */
-    }
     if (!align && (show_bits(gb, 8) == 0x80))
         align = 8;
     if ((show_bits_long(gb, 24 + align) & 0xFFFFFF) == 0x000001) {
@@ -1473,7 +1451,7 @@ static int decode_pic(AVSContext *h)
     }
     if (h->profile == CAVS_PROFILE_GUANGDIAN) {
         if(get_bits1(&h->gb)){
-            av_log(h->avctx, AV_LOG_ERROR, 
+            av_log(h->avctx, AV_LOG_ERROR,
                 "weighting_quant_flag not yet supported\n");
         }
         h->aec_enable = get_bits1(&h->gb);
@@ -1532,7 +1510,6 @@ static int decode_pic(AVSContext *h)
                                 printf("boo0\n");
                                 break;
                             }
-                            
                         }
                         if(!ret) {
                             printf("boboo\n");
@@ -1564,7 +1541,6 @@ static int decode_pic(AVSContext *h)
                                 printf("stuffing...\n");
                         }
                 }
-                
                 if (ret < 0)
                     break;
                 if(h->mby == 35)
@@ -1627,7 +1603,7 @@ static int decode_pic(AVSContext *h)
                         mb_type = cavs_aec_read_mb_type_b(&h->aec, &h->gb, a, b) + h->skip_mode_flag;
                         mb_type += B_SKIP;
 
-                        h->mb_type = mb_type;                        
+                        h->mb_type = mb_type;
                     }
                     if (mb_type > B_8X8)
                         ret = decode_mb_i(h, mb_type - B_8X8 - 1);
@@ -1680,13 +1656,11 @@ static int decode_pic(AVSContext *h)
                 if (ret < 0)
                     return ret;
             }
+
             h->combined.f->pict_type = h->DPB[0].f->pict_type;
             for(int y = 0; y < h->avctx->height; y+=2) {
                 memcpy(h->combined.f->data[0] + ((y + 0) * h->l_stride), h->DPB[0].f->data[0] + y/2 * h->l_stride, h->l_stride);
                 memcpy(h->combined.f->data[0] + ((y + 1) * h->l_stride), h->cur.f->data[0] + y/2 * h->l_stride   , h->l_stride);
-                
-                
-                
                 if (y < (h->avctx->height-2)/2) {
                     memcpy(h->combined.f->data[1] + ((y + 0) * h->c_stride), h->DPB[0].f->data[1] + y/2 * h->c_stride, h->c_stride);
                     memcpy(h->combined.f->data[1] + ((y + 1) * h->c_stride), h->cur.f->data[1] + y/2 * h->c_stride   , h->c_stride);
@@ -1798,6 +1772,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
     const uint8_t *buf_end;
     const uint8_t *buf_ptr;
     int frame_start = 0;
+
     printf("------------------------ cavs_decode_frame ---------------\n");
     if (buf_size == 0) {
         printf("Buffer == 0\n");
@@ -1855,20 +1830,6 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             init_get_bits(&h->gb, buf_ptr, input_size);
             h->stc = stc;
             if (decode_pic(h)) {
-                /*
-                //printf(" bbqbottom %d!\n", av_frame_ref(rframe, h->DPB[0].f));
-                //printf(" bbqbottom %d!\n", av_frame_ref(rframe, h->cur.f));
-                printf("Got decode_pic!\n");
-                if(h->progressive) {
-                    av_frame_ref(rframe, h->cur.f)
-                } else {
-                    
-                }
-//                rframe->interlaced_frame = 0;
-//                rframe->top_field_first = 1;
-//                rframe->height = rframe->height / 2;
-                *got_frame = 1;
-                return 0; */
                 printf("decode_pic returned non zero\n");
                 break;
             }

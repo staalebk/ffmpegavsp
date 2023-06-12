@@ -366,7 +366,7 @@ void ff_cavs_modify_mb_i(AVSContext *h, int *pred_mode_uv)
     h->top_pred_Y[h->mbx * 2 + 0] = h->pred_mode_Y[7];
     h->top_pred_Y[h->mbx * 2 + 1] = h->pred_mode_Y[8];
     h->pred_mode_C_B              = *pred_mode_uv;
-    //h->top_pred_C[h->mbx]         = *pred_mode_uv; 
+    //h->top_pred_C[h->mbx]         = *pred_mode_uv;
 
     /* modify pred modes according to availability of neighbour samples */
     if (!(h->flags & A_AVAIL)) {
@@ -820,7 +820,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
 
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
         !h->top_border_y || !h->top_border_u || !h->top_border_v ||
-        !h->col_mv || !h->col_type_base || !h->block || !h->top_pred_C || 
+        !h->col_mv || !h->col_type_base || !h->block || !h->top_pred_C ||
         !h->nz_coeff || !h->top_cbp || !h->top_mb_type) {
         av_freep(&h->top_qp);
         av_freep(&h->top_mv[0]);
@@ -862,8 +862,8 @@ av_cold int ff_cavs_init(AVCodecContext *avctx)
     ff_videodsp_init(&h->vdsp, 8);
     ff_cavsdsp_init(&h->cdsp);
     ff_init_scantable_permutation(permutation, h->cdsp.idct_perm);
-    ff_permute_scantable(h->permutated_scantable, zigzag_no2, permutation);
 //    ff_permute_scantable(h->permutated_scantable, ff_zigzag_direct, permutation);
+    ff_permute_scantable(h->permutated_scantable, zigzag_no2, permutation);
 
     h->avctx       = avctx;
     avctx->pix_fmt = AV_PIX_FMT_YUV420P;

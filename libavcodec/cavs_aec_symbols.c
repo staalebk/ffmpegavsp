@@ -72,7 +72,7 @@ int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int 
         refA = 0;
     if(refB > 0)
         refB = 1;
-    else   
+    else
         refB = 0;
     ctx = refA + 2 * refB;
     while(!aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_REFERENCE_INDEX + ctx], NULL, false)) {
@@ -106,7 +106,7 @@ int cavs_aec_read_mb_reference_index_b(Aec *aec, GetBitContext *gb, int refA, in
         refA = 0;
     if(refB > 0)
         refB = 1;
-    else   
+    else
         refB = 0;
     ctx = refA + 2 * refB;
     symbol = aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_REFERENCE_INDEX + ctx], NULL, false);
@@ -159,7 +159,7 @@ int cavs_aec_read_mv_diff(Aec *aec, GetBitContext *gb, int base_ctx, int mvda) {
             pre += (1<<exgolomb);
             exgolomb++;
         }
-        
+
         while(exgolomb--) {
             post |= aec_decode_bypass(&aec->aecdec, gb)<<exgolomb;
         }
