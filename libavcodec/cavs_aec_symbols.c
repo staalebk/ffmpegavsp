@@ -47,6 +47,22 @@ int cavs_aec_read_mb_type(Aec *aec, GetBitContext *gb) {
     return symbol;
 }
 
+int cavs_aec_read_mb_type_b(Aec *aec, GetBitContext *gb, int a, int b) {
+    int symbol = 0;
+    int ctx = 0;
+    ctx = 5 + a + b;
+    symbol = aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_TYPE+ctx], NULL, false);
+    ctx = 8;
+    while(symbol && !aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_TYPE+ctx], NULL, false)) {
+        symbol++;
+        ctx++;
+        if(ctx > 14)
+            ctx = 14;
+    }
+    aec_log(&aec->aecdec, "mb_type", symbol);
+    return symbol;
+}
+
 int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int refB) {
     int ctx;
     int symbol = 0;

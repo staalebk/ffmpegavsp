@@ -1618,32 +1618,16 @@ static int decode_pic(AVSContext *h)
                     if(!h->aec_enable) {
                         mb_type = get_ue_golomb(&h->gb) + B_SKIP + h->skip_mode_flag;
                     } else {
-                        int symbol = 0;
-                        int ctx = 0;
                         int a = 0;
                         int b = 0;
                         if (h->flags & A_AVAIL && h->mb_type != P_SKIP && h->mb_type != B_SKIP && h->mb_type != B_DIRECT)
                             a = 1;
                         if (h->flags & B_AVAIL && h->top_mb_type[h->mbx] != P_SKIP && h->top_mb_type[h->mbx] != B_SKIP && h->top_mb_type[h->mbx] != B_DIRECT)
                             b = 1;
-                        ctx = 5 + a + b;
-                        symbol = aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_TYPE+ctx], NULL, false);
-                        ctx = 8;
-                        while(symbol && !aec_decode_bin_debug(&h->aec.aecdec, &h->gb, 0, &h->aec.aecctx[MB_TYPE+ctx], NULL, false)) {
-                            symbol++;
-                            ctx++;
-                            if(ctx > 14)
-                                ctx = 14;
-                        }
-                        mb_type = symbol + h->skip_mode_flag;
+                        mb_type = cavs_aec_read_mb_type_b(&h->aec, &h->gb, a, b) + h->skip_mode_flag;
                         mb_type += B_SKIP;
 
-                        h->mb_type = mb_type;
-                        aec_log(&h->aec.aecdec, "mb_type A", a);
-
-                        aec_log(&h->aec.aecdec, "mb_type B", b);
-                        aec_log(&h->aec.aecdec, "mb_type", symbol);
-                        
+                        h->mb_type = mb_type;                        
                     }
                     if (mb_type > B_8X8)
                         ret = decode_mb_i(h, mb_type - B_8X8 - 1);
