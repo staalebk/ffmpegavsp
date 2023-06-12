@@ -20,6 +20,33 @@
  */
 #include "cavs_aec_symbols.h"
 
+
+int cavs_aec_read_mb_b8x8_type(Aec *aec, GetBitContext *gb) {
+    int symbol = 0;
+    symbol = aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_PART_TYPE], NULL, false) << 1;
+    if (symbol)
+        symbol |= aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_PART_TYPE + 1], NULL, false);
+    else
+        symbol |= aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_PART_TYPE + 2], NULL, false);
+    aec_log(&aec->aecdec, "mb_part_type", symbol);
+    return symbol;
+}
+
+int cavs_aec_read_mb_type(Aec *aec, GetBitContext *gb) {
+    int symbol = 0;
+    int ctx = 0;
+    while(!aec_decode_bin_debug(&aec->aecdec, gb, 0, &aec->aecctx[MB_TYPE+ctx], NULL, false)) {
+        symbol++;
+        ctx++;
+        if(ctx > 4)
+            ctx = 4;
+    }
+
+    //printf("mb_type: %d\n", mb_type);
+    aec_log(&aec->aecdec, "mb_type", symbol);
+    return symbol;
+}
+
 int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int refB) {
     int ctx;
     int symbol = 0;

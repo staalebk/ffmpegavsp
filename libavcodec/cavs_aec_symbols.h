@@ -56,6 +56,8 @@ typedef struct Aec {
 } Aec;
 
 
+int cavs_aec_read_mb_b8x8_type(Aec *aec, GetBitContext *gb);
+int cavs_aec_read_mb_type(Aec *aec, GetBitContext *gb);
 int cavs_aec_read_mb_reference_index(Aec *aec, GetBitContext *gb, int refA, int refB);
 int cavs_aec_read_mb_reference_index_b(Aec *aec, GetBitContext *gb, int refA, int refB);
 int cavs_aec_read_mb_skip_run(Aec *aec, GetBitContext *gb);
