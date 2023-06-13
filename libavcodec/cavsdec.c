@@ -563,7 +563,6 @@ static int decode_residual_block(AVSContext *h, GetBitContext *gb,
     uint8_t run_buf[65];
     int16_t *block = h->block;
     if (!h->aec_enable) {
-    skip_bits(&h->gb,2);
     for (i = 0; i < 65; i++) {
         level_code = get_ue_code(gb, r->golomb_order);
         if (level_code >= ESCAPE_CODE) {

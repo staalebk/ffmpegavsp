@@ -34,7 +34,7 @@ int dbg_get_bits(GetBitContext *gb, int n, const char *c, bool dbg, FILE *f){
             b = get_bits(gb,2);
             buf = 0xFFFFFF;
             //printf("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n");
-            if (f != NULL && dbg) {     
+            if (f != NULL && dbg) {
                 fprintf(f, "read bit: %d SKIPPED\n", b);
                 fprintf(f, "read bit: %d SKIPPED\n", align);
             }
@@ -62,7 +62,7 @@ void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb) {
     printf("DEBUG ------------- DEBUG -------------- DEBUG ---------- %s\n", filename);
     aecdec->f = fopen(filename, "w");
     aecdec->debug = true;
-    
+
     if(aecdec->f == NULL) {
         printf("Error opening debug file %s.\n", filename);
         exit(1);

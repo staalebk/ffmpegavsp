@@ -314,7 +314,7 @@ int cavs_aec_read_cbp(Aec *aec, GetBitContext *gb, int a_cbp, int b_cbp, bool a_
                 cbp_code |= (1<<4);
         }
     }
-    
+
     aec_log(&aec->aecdec, "CBP", cbp_code);
     return cbp_code;
 }

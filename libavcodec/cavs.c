@@ -626,7 +626,6 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
             }
             mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax); //+ (unsigned)mvP->x;
             my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday); //+ (unsigned)mvP->y;
-            //printf("GEEK %d %d %d %d\n", mvdax, mvday, mx, my);
         }
 
         if (mx != (int16_t)mx || my != (int16_t)my) {
@@ -697,6 +696,7 @@ void ff_cavs_init_mb(AVSContext *h)
 int ff_cavs_next_mb(AVSContext *h)
 {
     int i;
+
     aec_log(&h->aec.aecdec, "---------------------- Macroblock ----------------------------------------", h->mbidx + 1);
     h->flags |= A_AVAIL;
     h->cy    += 16;
