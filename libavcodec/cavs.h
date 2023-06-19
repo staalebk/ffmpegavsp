@@ -158,14 +158,19 @@ enum cavs_mv_direction {
   MV_BWD = 2
 };
 
-DECLARE_ALIGNED(8, typedef, struct) {
+//DECLARE_ALIGNED(8, typedef, struct) {
+typedef struct {
     int16_t x;
     int16_t y;
     int16_t dist;
     int16_t ref;
     int8_t direction;
-    //int8_t fill;
-    //int8_t fill2;
+    int16_t rx;
+    int16_t ry;
+    /*
+    int8_t fill;
+    int8_t fill2;
+    */
 } cavs_vector;
 
 struct dec_2dvlc {

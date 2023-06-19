@@ -939,10 +939,7 @@ static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
     int ref[4];
     ff_cavs_init_mb(h);
     /* reset all MVs */
-    h->mv[MV_FWD_X0] = ff_cavs_dir_mv;
-    set_mvs(&h->mv[MV_FWD_X0], BLK_16X16);
-    h->mv[MV_BWD_X0] = ff_cavs_dir_mv;
-    set_mvs(&h->mv[MV_BWD_X0], BLK_16X16);
+
     switch (mb_type) {
     case P_SKIP:
         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_PSKIP,  BLK_16X16, 0);
@@ -1321,6 +1318,7 @@ static int decode_pic(AVSContext *h)
     }
 
     av_frame_unref(h->cur.f);
+    av_frame_unref(h->combined.f);
     h->field = 0;
 
     skip_bits(&h->gb, 16); //bbv_delay
@@ -1642,7 +1640,50 @@ static int decode_pic(AVSContext *h)
             h->cur.poc = h->DPB[0].poc + 1;
             printf("poc: %d\n", h->cur.poc);
             h->mby = 0;
-            //h->ref_flag = 1;            
+            //h->ref_flag = 1;
+
+
+            {
+            ref = 0;
+            /* get temporal distances and MV scaling factors */
+            if (h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
+                h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
+                ref++;
+                if(!h->pic_structure) {
+                    h->dist[ref] = (h->cur.poc - h->DPB[ref].poc ) & 511;
+                    ref++;
+                }
+            } else {
+                h->dist[ref] = (h->DPB[ref].poc  - h->cur.poc) & 511;
+                ref++;
+                if(!h->pic_structure) {
+                    h->dist[ref] = (h->DPB[ref].poc  - h->cur.poc) & 511;
+                    ref++;
+                }
+            }
+            h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
+            ref++;
+            for(int xxx = 0; xxx < 4;xxx++)
+                printf("dist: %d\n", h->dist[xxx]);
+            if(!h->pic_structure)
+                h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
+            h->scale_den[0] = h->dist[0] ? 512/h->dist[0] : 0;
+            h->scale_den[1] = h->dist[1] ? 512/h->dist[1] : 0;
+            h->scale_den[2] = h->dist[2] ? 512/h->dist[2] : 0;
+            h->scale_den[3] = h->dist[3] ? 512/h->dist[3] : 0;
+            if (h->cur.f->pict_type == AV_PICTURE_TYPE_B) {
+                h->sym_factor = h->dist[0] * h->scale_den[1];
+                if (FFABS(h->sym_factor) > 32768) {
+                    av_log(h->avctx, AV_LOG_ERROR, "sym_factor %d too large\n", h->sym_factor);
+                    return AVERROR_INVALIDDATA;
+                }
+            } else {
+                h->direct_den[0] = h->dist[0] ? 16384 / h->dist[0] : 0;
+                h->direct_den[1] = h->dist[1] ? 16384 / h->dist[1] : 0;
+            }
+            printf("0 Dist, scale: %d %d\n", h->dist[0], h->scale_den[0]);
+            printf("1 Dist, scale: %d %d\n", h->dist[1], h->scale_den[1]);
+            }
         }
     } while (--fields);
     printf("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBQ %d\n", ret);
@@ -1775,9 +1816,9 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
     printf("------------------------ cavs_decode_frame ---------------\n");
     if (buf_size == 0) {
         printf("Buffer == 0\n");
-        if (!h->low_delay && h->DPB[0].f->data[0]) {
+        if (!h->low_delay && h->combined.f->data[0]) {
             *got_frame = 1;
-            av_frame_move_ref(rframe, h->DPB[0].f);
+            av_frame_move_ref(rframe, h->combined.f);
         }
         printf("---------------------------- cavs_decode_frame return: 0 ----\n");
         return 0;
@@ -1794,7 +1835,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             printf("bzzz Start code: 0x%04x\n", stc & 0xFF);
             if (!h->stc)
                 av_log(h->avctx, AV_LOG_WARNING, "no frame decoded\n");
-            printf("------------------------------- cavs_decode_frame return: %ld\n", buf_ptr - buf);
+            printf("------------------------------- stc or no buf return: %ld\n", buf_ptr - buf);
             return FFMAX(0, buf_ptr - buf);
         }
         input_size = (buf_end - buf_ptr) * 8;
@@ -1817,7 +1858,6 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             av_frame_unref(h->combined.f);
             if (frame_start > 1) {
                 printf("invalid data\n");
-                printf("--------------------------------- cavs_decode_frame return: %d :(\n", AVERROR_INVALIDDATA);
                 return AVERROR_INVALIDDATA;
             }
             frame_start ++;
@@ -1839,7 +1879,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                     //buf_ptr = avpriv_find_start_code(buf_ptr, buf_end, &stc);
                     //if ((ret = av_frame_ref(rframe, h->DPB[!h->low_delay].f)) < 0)
                     if ((ret = av_frame_ref(rframe, h->combined.f)) < 0) {
-                        printf("-------------------------- cavs_decode_frame return: %d  :/\n", ret);
+                        printf("-------------------------- av_frame_ref %d  :/\n", ret);
                         return ret;
                     }
                     printf("combined should be combined\n");
@@ -1847,7 +1887,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                     *got_frame = 0;
                 }
             } else {
-                av_frame_move_ref(rframe, h->cur.f);
+                av_frame_move_ref(rframe, h->combined.f);
             }
             break;
         case EXT_START_CODE:

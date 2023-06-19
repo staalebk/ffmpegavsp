@@ -56,7 +56,7 @@ static const uint8_t tc_tab[64] = {
 
 /** mark block as unavailable, i.e. out of picture
  *  or not yet decoded */
-static const cavs_vector un_mv = { 0, 0, 1, NOT_AVAIL, NOT_AVAIL };
+static const cavs_vector un_mv = { 0, 0, 1, NOT_AVAIL, NOT_AVAIL, 0, 0};
 
 static const int8_t left_modifier_l[8] = {  0, -1,  6, -1, -1, 7, 6, 7 };
 static const int8_t top_modifier_l[8]  = { -1,  1,  5, -1, -1, 5, 7, 7 };
@@ -583,9 +583,11 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
 
     mvP->ref  = ref;
     mvP->dist = h->dist[mvP->ref];
-    if (mvC->ref == NOT_AVAIL || (nP == MV_FWD_X3) || (nP == MV_BWD_X3 ))
+    /* If mvC is not available, replace it with mvD */
+    if ((mvC->ref == NOT_AVAIL && mvC->direction != REF_INTRA)|| (nP == MV_FWD_X3) || (nP == MV_BWD_X3 )) {
         mvC = &h->mv[nP - 5];  // set to top-left (mvD)
-    if (mode == MV_PRED_PSKIP &&
+    }
+    if (0 && mode == MV_PRED_PSKIP &&
         (mvA->ref == NOT_AVAIL ||
          mvB->ref == NOT_AVAIL ||
          (mvA->x | mvA->y | mvA->ref) == 0 ||
@@ -614,6 +616,8 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
     if (mode < MV_PRED_PSKIP) {
         int mx;
         int my;
+        int rx;
+        int ry;
         if(!h->aec_enable) {
             mx = get_se_golomb(&h->gb) + (unsigned)mvP->x;
             my = get_se_golomb(&h->gb) + (unsigned)mvP->y;
@@ -621,11 +625,18 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
             int mvdax = 0;
             int mvday = 0;
             if (mvA->ref != NOT_AVAIL && mvP->direction == mvA->direction) {
-                mvdax = abs(mvA->x);
-                mvday = abs(mvA->y);
+                mvdax = abs(mvA->rx);
+                mvday = abs(mvA->ry);
             }
-            mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax); //+ (unsigned)mvP->x;
-            my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday); //+ (unsigned)mvP->y;
+            mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax);// + (unsigned)mvP->x;
+            my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday);// + (unsigned)mvP->y;
+            rx = mx;
+            ry = my;
+
+            mvP->rx = mx;
+            mvP->ry = my;
+            mx += mvP->x;
+            my += mvP->y;
         }
 
         if (mx != (int16_t)mx || my != (int16_t)my) {
@@ -635,8 +646,10 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
             mvP->y = my;
         }
     } else {
+        /*
         mvP->x = 0;
         mvP->y = 0;
+        */
     }
     set_mvs(mvP, size);
 }
@@ -686,6 +699,10 @@ void ff_cavs_init_mb(AVSContext *h)
         h->mv[MV_FWD_D3] = un_mv;
         h->mv[MV_BWD_D3] = un_mv;
     }
+    h->mv[MV_FWD_X0] = ff_cavs_dir_mv;
+    set_mvs(&h->mv[MV_FWD_X0], BLK_16X16);
+    h->mv[MV_BWD_X0] = ff_cavs_dir_mv;
+    set_mvs(&h->mv[MV_BWD_X0], BLK_16X16);
 }
 
 /**
