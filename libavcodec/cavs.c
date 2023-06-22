@@ -719,7 +719,7 @@ int ff_cavs_next_mb(AVSContext *h)
     h->cy    += 16;
     h->cu    += 8;
     h->cv    += 8;
-    
+
     /* copy bottom mvs from cache to top line */
     h->top_mv[0][h->mbx * 2 + 0] = h->mv[MV_FWD_X2];
     h->top_mv[0][h->mbx * 2 + 1] = h->mv[MV_FWD_X3];
