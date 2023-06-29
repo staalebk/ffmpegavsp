@@ -926,6 +926,8 @@ static int get_ref_b(AVSContext *h, enum cavs_mv_loc nP, int def, enum cavs_mv_d
         ref = h->ref_flag ? 0 : cavs_aec_read_mb_reference_index_b(&h->aec, &h->gb, refA, refB);
         mvP->ref = ref;
         mvP->direction = direction;
+        if (direction == MV_FWD)
+            ref += 2;
         return ref;
     } else {
         return h->ref_flag ? 0 : get_bits1(gb);
@@ -1374,15 +1376,15 @@ static int decode_pic(AVSContext *h)
     if (h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
         h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
         ref++;
-        if(h->pic_structure) {
+        if(!h->pic_structure) {
             h->dist[ref] = (h->cur.poc - h->DPB[ref].poc ) & 511;
             ref++;
         }
     } else {
-        h->dist[ref] = (h->DPB[ref].poc  - h->cur.poc) & 511;
+        h->dist[ref] = (h->DPB[ref].poc - h->cur.poc) & 511;
         ref++;
-        if(h->pic_structure) {
-            h->dist[ref] = (h->DPB[ref].poc  - h->cur.poc) & 511;
+        if(!h->pic_structure) {
+            h->dist[ref] = (h->DPB[ref].poc - h->cur.poc) & 511;
             ref++;
         }
     }
