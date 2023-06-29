@@ -587,10 +587,15 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
     if ((mvC->ref == NOT_AVAIL && mvC->direction != REF_INTRA)|| (nP == MV_FWD_X3) || (nP == MV_BWD_X3 )) {
         mvC = &h->mv[nP - 5];  // set to top-left (mvD)
     }
+    /*
     if (0 && mode == MV_PRED_PSKIP &&
         (mvA->ref == NOT_AVAIL ||
          mvB->ref == NOT_AVAIL ||
          (mvA->x | mvA->y | mvA->ref) == 0 ||
+         (mvB->x | mvB->y | mvB->ref) == 0)) {
+    */
+    if (mode == MV_PRED_PSKIP &&
+         ((mvA->x | mvA->y | mvA->ref) == 0 ||
          (mvB->x | mvB->y | mvB->ref) == 0)) {
         mvP2 = &un_mv;
     /* if there is only one suitable candidate, take it */
