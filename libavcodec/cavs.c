@@ -835,9 +835,9 @@ int ff_cavs_init_top_lines(AVSContext *h)
     h->top_border_v = av_calloc(h->mb_width,  10);
 
     /* alloc space for co-located MVs and types */
-    h->col_mv        = av_calloc(h->mb_width * h->mb_height,
+    h->col_mv        = av_calloc(h->mb_width * h->mb_height * 2,
                                  4 * sizeof(*h->col_mv));
-    h->col_type_base = av_mallocz(h->mb_width * h->mb_height);
+    h->col_type_base = av_mallocz(h->mb_width * h->mb_height * 2);
     h->block         = av_mallocz(64 * sizeof(int16_t));
 
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
@@ -895,6 +895,7 @@ av_cold int ff_cavs_init(AVCodecContext *avctx)
     h->DPB[1].f = av_frame_alloc();
     h->DPB[2].f = av_frame_alloc();
     h->DPB[3].f = av_frame_alloc();
+    h->combined_ip.f = av_frame_alloc();
     h->combined.f = av_frame_alloc();
     if (!h->cur.f || !h->DPB[0].f || !h->DPB[1].f || !h->DPB[2].f || !h->DPB[3].f)
         return AVERROR(ENOMEM);
@@ -930,6 +931,7 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
     av_frame_free(&h->DPB[1].f);
     av_frame_free(&h->DPB[2].f);
     av_frame_free(&h->DPB[3].f);
+    av_frame_free(&h->combined_ip.f);
     av_frame_free(&h->combined.f);
 
     av_freep(&h->top_qp);

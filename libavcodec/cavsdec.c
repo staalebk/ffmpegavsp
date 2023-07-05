@@ -926,8 +926,6 @@ static int get_ref_b(AVSContext *h, enum cavs_mv_loc nP, int def, enum cavs_mv_d
         ref = h->ref_flag ? 0 : cavs_aec_read_mb_reference_index_b(&h->aec, &h->gb, refA, refB);
         mvP->ref = ref;
         mvP->direction = direction;
-        if (direction == MV_FWD)
-            ref += 2;
         return ref;
     } else {
         return h->ref_flag ? 0 : get_bits1(gb);
@@ -1320,7 +1318,6 @@ static int decode_pic(AVSContext *h)
     }
 
     av_frame_unref(h->cur.f);
-    av_frame_unref(h->combined.f);
     h->field = 0;
 
     skip_bits(&h->gb, 16); //bbv_delay
@@ -1623,23 +1620,46 @@ static int decode_pic(AVSContext *h)
         //if (!h->pic_structure && h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
         if (!h->pic_structure && fields > 1) {
             int old_pic_type = h->cur.f->pict_type;
+            int cur_poc = h->cur.poc;
             printf("Here we go again!\n");
-            get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
+            //get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
+            for(int i = 0; i < 16; i++) {
+                if ((show_bits_long(&h->gb, 24) & 0xFFFFFF) == 0x000001) {
+                    printf("Had to eat %d bits...\n", i);
+                    break;
+                }
+                get_bits(&h->gb, 1);
+            }
             skip_count = -1;
+            if (h->cur.f->pict_type == AV_PICTURE_TYPE_B) {
+                if(h->combined.f->data[0] == NULL) {
+                    ret = ff_get_buffer(h->avctx, h->combined.f, AV_GET_BUFFER_FLAG_REF);
+                    if (ret < 0)
+                        return ret;    
+                }
+                h->combined.f->pict_type = h->cur.f->pict_type;
+                for(int y = 0; y < h->avctx->height; y+=2) {
+                    memcpy(h->combined.f->data[0] + ((y + 0) * h->l_stride), h->cur.f->data[0] + y/2 * h->l_stride   , h->l_stride);
+                    if (y < (h->avctx->height-2)/2) {
+                        memcpy(h->combined.f->data[1] + ((y + 0) * h->c_stride), h->cur.f->data[1] + y/2 * h->c_stride   , h->c_stride);
+                        memcpy(h->combined.f->data[2] + ((y + 0) * h->c_stride), h->cur.f->data[2] + y/2 * h->c_stride   , h->c_stride);
+                    }
+                }
+            } else {
+                av_frame_unref(h->DPB[3].f);
+                FFSWAP(AVSFrame, h->cur, h->DPB[3]);
+                FFSWAP(AVSFrame, h->DPB[2], h->DPB[3]);
+                FFSWAP(AVSFrame, h->DPB[1], h->DPB[2]);
+                FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
             
-            av_frame_unref(h->DPB[3].f);
-            FFSWAP(AVSFrame, h->cur, h->DPB[3]);
-            FFSWAP(AVSFrame, h->DPB[2], h->DPB[3]);
-            FFSWAP(AVSFrame, h->DPB[1], h->DPB[2]);
-            FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
-            
-            ff_get_buffer(h->avctx, h->cur.f, AV_GET_BUFFER_FLAG_REF);
-            ret = ff_cavs_init_pic(h);
+                ff_get_buffer(h->avctx, h->cur.f, AV_GET_BUFFER_FLAG_REF);
+                ret = ff_cavs_init_pic(h);
+            }
             printf("pict_type o_o: %d\n", old_pic_type);
             h->cur.f->pict_type = old_pic_type;
             if (old_pic_type == AV_PICTURE_TYPE_I)
                 h->cur.f->pict_type = AV_PICTURE_TYPE_P;
-            h->cur.poc = h->DPB[0].poc + 1;
+            h->cur.poc = cur_poc + 1;
             printf("poc: %d\n", h->cur.poc);
             h->mby = 0;
             //h->ref_flag = 1;
@@ -1717,6 +1737,32 @@ static int decode_pic(AVSContext *h)
         FFSWAP(AVSFrame, h->DPB[1], h->DPB[2]);
         FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
         printf("Deinterlacing and bufferstuff done\n");
+    }
+    if (ret >= 0 && h->cur.f->pict_type == AV_PICTURE_TYPE_B) {
+        if(!h->progressive) {
+            if(h->combined.f->data[0] == NULL) {
+                av_log(h->avctx, AV_LOG_ERROR, "This should not happen TODO REMOVE\n");
+                exit(1);
+                ret = ff_get_buffer(h->avctx, h->combined.f, AV_GET_BUFFER_FLAG_REF);
+                if (ret < 0)
+                    return ret;
+            }
+            h->combined.f->pict_type = h->DPB[0].f->pict_type;
+            for(int y = 0; y < h->avctx->height; y+=2) {
+                memcpy(h->combined.f->data[0] + ((y + 1) * h->l_stride), h->cur.f->data[0] + y/2 * h->l_stride   , h->l_stride);
+                if (y < (h->avctx->height-2)/2) {
+                    memcpy(h->combined.f->data[1] + ((y + 1) * h->c_stride), h->cur.f->data[1] + y/2 * h->c_stride   , h->c_stride);
+                    memcpy(h->combined.f->data[2] + ((y + 1) * h->c_stride), h->cur.f->data[2] + y/2 * h->c_stride   , h->c_stride);
+                }
+            }
+            /*
+            h->combined.poc = h->DPB[0].poc/2;
+            for(int y = 0; y < h->combined.poc*1920*16+1920*16; y+=2) {
+               // h->combined.f->data[0][y] = 126;
+            }
+            */
+        }
+        printf("Deinterlacing and bufferstuff B done\n");
     }
     return ret;
 }
@@ -1820,7 +1866,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
         printf("Buffer == 0\n");
         if (!h->low_delay && h->combined.f->data[0]) {
             *got_frame = 1;
-            av_frame_move_ref(rframe, h->combined.f);
+            av_frame_move_ref(rframe, h->combined_ip.f);
         }
         printf("---------------------------- cavs_decode_frame return: 0 ----\n");
         return 0;
@@ -1857,7 +1903,7 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                 h->got_keyframe = 1;
             }
         case PIC_PB_START_CODE:
-            av_frame_unref(h->combined.f);
+            printf("PIC_PB_START\n");
             if (frame_start > 1) {
                 printf("invalid data\n");
                 return AVERROR_INVALIDDATA;
@@ -1877,32 +1923,52 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
             printf("decode_pic returned zero\n");
             *got_frame = 1;
             if (h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
-                if (h->DPB[!h->low_delay].f->data[0]) {
+                if ( h->combined_ip.f->data[0] /* h->DPB[!h->low_delay].f->data[0] */) {
                     //buf_ptr = avpriv_find_start_code(buf_ptr, buf_end, &stc);
                     //if ((ret = av_frame_ref(rframe, h->DPB[!h->low_delay].f)) < 0)
-                    if ((ret = av_frame_ref(rframe, h->combined.f)) < 0) {
+                    if ((ret = av_frame_ref(rframe, h->combined_ip.f)) < 0) {
                         printf("-------------------------- av_frame_ref %d  :/\n", ret);
+                        av_log(h->avctx, AV_LOG_WARNING, "DBG 4 %d\n", *got_frame);
                         return ret;
                     }
                     printf("combined should be combined\n");
                 } else {
+                    printf("Did not get a frame, first I/P frame?\n");
                     *got_frame = 0;
                 }
+                //av_frame_unref(h->combined_ip.f);
+                FFSWAP(AVSFrame, h->combined_ip, h->combined);
             } else {
-                av_frame_move_ref(rframe, h->combined.f);
+                /*
+                if ((ret = av_frame_ref(rframe, h->combined.f)) < 0) {
+                    printf("-------------------------- av_frame_ref %d  :/ BBB\n", ret);
+                    av_log(h->avctx, AV_LOG_WARNING, "DBG 5 %d\n", *got_frame);
+                    return ret;
+                }
+                */
+                //av_frame_move_ref(rframe, h->combined.f);
+                //*got_frame = 0;
+                av_frame_ref(rframe, h->combined.f);
+                av_frame_unref(h->combined.f);
+                printf("combined should be combined BB\n");
             }
             break;
         case EXT_START_CODE:
+            printf("SHOULD NOT HAPPEN1\n");
             //mpeg_decode_extension(avctx, buf_ptr, input_size);
             break;
         case USER_START_CODE:
+            printf("SHOULD NOT HAPPEN2\n");
             //mpeg_decode_user_data(avctx, buf_ptr, input_size);
             break;
         default:
+            printf("Default cavs_decode_frame switch\n");
+            /*
             if (stc <= SLICE_MAX_START_CODE) {
                 init_get_bits(&h->gb, buf_ptr, input_size);
                 decode_slice_header(h, &h->gb);
             }
+            */
             break;
         }
     }

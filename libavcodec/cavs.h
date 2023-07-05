@@ -195,6 +195,7 @@ typedef struct AVSContext {
     GetBitContext gb;
     AVSFrame cur;     ///< currently decoded frame
     AVSFrame DPB[4];  ///< reference frames/fields
+    AVSFrame combined_ip; ///< Combined fields into one frame
     AVSFrame combined; ///< Combined fields into one frame
     Aec aec;
     int dist[4];     ///< temporal distances from current frame to ref frames/fields
