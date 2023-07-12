@@ -163,10 +163,11 @@ typedef struct {
     int16_t x;
     int16_t y;
     int16_t dist;
-    int16_t ref;
+    int8_t ref;
     int8_t direction;
     int16_t rx;
     int16_t ry;
+    int8_t rref;
     /*
     int8_t fill;
     int8_t fill2;
@@ -235,7 +236,7 @@ typedef struct AVSContext {
        the same is repeated for backward motion vectors */
     cavs_vector mv[2*4*3];
     cavs_vector *top_mv[2];
-    cavs_vector *col_mv;
+    cavs_vector *col_mv[2];
 
     /** luma pred mode cache
        0:    --  B2  B3
@@ -279,7 +280,7 @@ typedef struct AVSContext {
 
     void (*intra_pred_l[8])(uint8_t *d, uint8_t *top, uint8_t *left, ptrdiff_t stride);
     void (*intra_pred_c[7])(uint8_t *d, uint8_t *top, uint8_t *left, ptrdiff_t stride);
-    uint8_t *col_type_base;
+    uint8_t *col_type_base[2];
 
     /* scaling factors for MV prediction */
     int sym_factor;    ///< for scaling in symmetrical B block

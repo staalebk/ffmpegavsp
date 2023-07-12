@@ -56,7 +56,7 @@ static const uint8_t tc_tab[64] = {
 
 /** mark block as unavailable, i.e. out of picture
  *  or not yet decoded */
-static const cavs_vector un_mv = { 0, 0, 1, NOT_AVAIL, NOT_AVAIL, 0, 0};
+static const cavs_vector un_mv = { 0, 0, 1, NOT_AVAIL, NOT_AVAIL, 0, 0, 0};
 
 static const int8_t left_modifier_l[8] = {  0, -1,  6, -1, -1, 7, 6, 7 };
 static const int8_t top_modifier_l[8]  = { -1,  1,  5, -1, -1, 5, 7, 7 };
@@ -835,9 +835,12 @@ int ff_cavs_init_top_lines(AVSContext *h)
     h->top_border_v = av_calloc(h->mb_width,  10);
 
     /* alloc space for co-located MVs and types */
-    h->col_mv        = av_calloc(h->mb_width * h->mb_height * 2,
-                                 4 * sizeof(*h->col_mv));
-    h->col_type_base = av_mallocz(h->mb_width * h->mb_height * 2);
+    h->col_mv[0]        = av_calloc(h->mb_width * h->mb_height * 2,
+                                 4 * sizeof(*h->col_mv[0]));
+    h->col_mv[1]        = av_calloc(h->mb_width * h->mb_height * 2,
+                                 4 * sizeof(*h->col_mv[1]));  // TODO FIXME 
+    h->col_type_base[0] = av_mallocz(h->mb_width * h->mb_height * 2);
+    h->col_type_base[1] = av_mallocz(h->mb_width * h->mb_height * 2); //TODO FIXME
     h->block         = av_mallocz(64 * sizeof(int16_t));
 
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
@@ -856,7 +859,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
         av_freep(&h->top_border_u);
         av_freep(&h->top_border_v);
         av_freep(&h->col_mv);
-        av_freep(&h->col_type_base);
+        av_freep(&h->col_type_base); // TODO: Fixme
         av_freep(&h->block);
         return AVERROR(ENOMEM);
     }

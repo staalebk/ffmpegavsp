@@ -464,29 +464,77 @@ static const struct dec_2dvlc chroma_dec[5] = {
 
 static inline void store_mvs(AVSContext *h)
 {
-    h->col_mv[h->mbidx * 4 + 0] = h->mv[MV_FWD_X0];
-    h->col_mv[h->mbidx * 4 + 1] = h->mv[MV_FWD_X1];
-    h->col_mv[h->mbidx * 4 + 2] = h->mv[MV_FWD_X2];
-    h->col_mv[h->mbidx * 4 + 3] = h->mv[MV_FWD_X3];
+    h->col_mv[h->field][h->mbidx * 4 + 0] = h->mv[MV_FWD_X0];
+    h->col_mv[h->field][h->mbidx * 4 + 1] = h->mv[MV_FWD_X1];
+    h->col_mv[h->field][h->mbidx * 4 + 2] = h->mv[MV_FWD_X2];
+    h->col_mv[h->field][h->mbidx * 4 + 3] = h->mv[MV_FWD_X3];
 }
 
 static inline void mv_pred_direct(AVSContext *h, cavs_vector *pmv_fw,
                                   cavs_vector *col_mv)
 {
+    int delta1 = 0;
+    int deltaFw = 0;
+    int deltaBw = 0;
+    int bw_ref;
+    int fw_ref;
     cavs_vector *pmv_bw = pmv_fw + MV_BWD_OFFS;
+#if 0
     unsigned den = h->direct_den[col_mv->ref];
     int m = FF_SIGNBIT(col_mv->x);
 
-    pmv_fw->dist = h->dist[1];
-    pmv_bw->dist = h->dist[0];
-    pmv_fw->ref = 1;
-    pmv_bw->ref = 0;
+    pmv_fw->dist = h->dist[3];
+    pmv_bw->dist = h->dist[1];
+    pmv_fw->ref = 3;
+    pmv_bw->ref = 1;
     /* scale the co-located motion vector according to its temporal span */
     pmv_fw->x =     (((den + (den * col_mv->x * pmv_fw->dist ^ m) - m - 1) >> 14) ^ m) - m;
     pmv_bw->x = m - (((den + (den * col_mv->x * pmv_bw->dist ^ m) - m - 1) >> 14) ^ m);
     m = FF_SIGNBIT(col_mv->y);
     pmv_fw->y =     (((den + (den * col_mv->y * pmv_fw->dist ^ m) - m - 1) >> 14) ^ m) - m;
     pmv_bw->y = m - (((den + (den * col_mv->y * pmv_bw->dist ^ m) - m - 1) >> 14) ^ m);
+#endif
+
+    bw_ref = h->field ? 0 : 1;
+    fw_ref = col_mv->ref + 2;
+    if(fw_ref > 3)
+        fw_ref = 3;
+    
+    printf("h-field: %d, col_mv->ref: %d\n", h->field, col_mv->ref);
+    printf("col_mv: %d %d\n", col_mv->x, col_mv->y);
+    if (h->field == 0 && (col_mv->ref == 0 || col_mv->ref == 2))
+        delta1 = 2;
+    if (h->field == 1 && (col_mv->ref == 0 || col_mv->ref == 2))
+        delta1 = -2;
+    if (h->field == 0 && fw_ref == 2)
+        deltaFw = 2;
+    if (h->field == 1 && fw_ref == 2)
+        deltaFw = -2;
+    //TODO: deltaBw is always 0 
+    printf("delta1: %d fw: %d bw: %d\n", delta1, deltaFw, deltaBw);
+
+    if (col_mv->x < 0) {
+        pmv_fw->x = -(((16384/col_mv->dist) * (1 - col_mv->x * h->dist[fw_ref])-1)>>14);
+        pmv_fw->x =  (((16384/col_mv->dist) * (1 - col_mv->x * h->dist[bw_ref])-1)>>14);
+    } else {
+        pmv_fw->x =  (((16384/col_mv->dist) * (1 + col_mv->x * h->dist[fw_ref])-1)>>14);
+        pmv_bw->x = -(((16384/col_mv->dist) * (1 + col_mv->x * h->dist[bw_ref])-1)>>14);
+    }
+
+    if ((col_mv->y + delta1) < 0) {
+        pmv_fw->y = -(((16384/col_mv->dist) * (1 - (col_mv->y + delta1) * h->dist[fw_ref])-1)>>14) - deltaFw;
+        pmv_bw->y =  (((16384/col_mv->dist) * (1 - (col_mv->y + delta1) * h->dist[bw_ref])-1)>>14) - deltaBw;
+    } else {
+        pmv_fw->y =  (((16384/col_mv->dist) * (1 + (col_mv->y + delta1) * h->dist[fw_ref])-1)>>14) - deltaFw;
+        pmv_bw->y = -(((16384/col_mv->dist) * (1 + (col_mv->y + delta1) * h->dist[bw_ref])-1)>>14) - deltaBw;
+    }
+    pmv_fw->dist = h->dist[fw_ref];
+    pmv_bw->dist = h->dist[bw_ref];
+    pmv_fw->ref = fw_ref;
+    pmv_bw->ref = bw_ref;
+    //printf("pred_direct fwd: %d %d %d %d bwd: %d %d %d %d\n", pmv_fw->x, pmv_fw->y, pmv_fw->ref, pmv_fw->dist, pmv_bw->x, pmv_bw->y, pmv_bw->ref, pmv_bw->dist);
+    printf("pred_direct fwd: %d %d %d bwd: %d %d %d\n", pmv_fw->x, pmv_fw->y, pmv_fw->dist, pmv_bw->x, pmv_bw->y, pmv_bw->dist);
+    //printf("mv_pred_direct: pred fwd: %d %d bwd: %d %d dist: %d %d col: %d %d %d coldist: %d\n", pmv_fw->x, pmv_fw->y, pmv_bw->x, pmv_bw->y, pmv_fw->dist, pmv_bw->dist, col_mv->x, col_mv->y, col_mv->ref, col_mv->dist);
 }
 
 static inline void mv_pred_sym(AVSContext *h, cavs_vector *src,
@@ -763,7 +811,7 @@ static inline void set_mv_intra(AVSContext *h)
     h->mv[MV_BWD_X0] = ff_cavs_intra_mv;
     set_mvs(&h->mv[MV_BWD_X0], BLK_16X16);
     if (h->cur.f->pict_type != AV_PICTURE_TYPE_B)
-        h->col_type_base[h->mbidx] = I_8X8;
+        h->col_type_base[h->field][h->mbidx] = I_8X8;
 }
 
 static int decode_mb_i(AVSContext *h, int cbp_code)
@@ -920,11 +968,15 @@ static int get_ref_b(AVSContext *h, enum cavs_mv_loc nP, int def, enum cavs_mv_d
         cavs_vector *mvP = &h->mv[nP];
         cavs_vector *mvA = &h->mv[nP-1];
         cavs_vector *mvB = &h->mv[nP-4];
-        refA = mvA->ref;
-        refB = mvB->ref;
+        refA = mvA->rref;
+        refB = mvB->rref;
 
         ref = h->ref_flag ? 0 : cavs_aec_read_mb_reference_index_b(&h->aec, &h->gb, refA, refB);
-        mvP->ref = ref;
+        mvP->rref = ref;
+        if(direction == MV_FWD)
+            mvP->ref = ref + 2;
+        else
+            mvP->ref = ref ^ 1;
         mvP->direction = direction;
         return ref;
     } else {
@@ -983,7 +1035,8 @@ static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
     if (mb_type != P_SKIP)
         decode_residual_inter(h);
     ff_cavs_filter(h, mb_type);
-    h->col_type_base[h->mbidx] = mb_type;
+    h->col_type_base[h->field][h->mbidx] = mb_type;
+    printf("h->field: %d\n", h->field);
 }
 
 static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
@@ -996,26 +1049,31 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
     ff_cavs_init_mb(h);
 
     /* reset all MVs */
+    /*
     h->mv[MV_FWD_X0] = ff_cavs_dir_mv;
     set_mvs(&h->mv[MV_FWD_X0], BLK_16X16);
     h->mv[MV_BWD_X0] = ff_cavs_dir_mv;
     set_mvs(&h->mv[MV_BWD_X0], BLK_16X16);
+    */
     switch (mb_type) {
     case B_SKIP:
     case B_DIRECT:
-        if (!h->col_type_base[h->mbidx]) {
+        printf("field: %d mbidx: %d type: %d\n", h->field, h->mbidx, h->col_type_base[h->field][h->mbidx]);
+        if (!h->col_type_base[h->field][h->mbidx]) {
             /* intra MB at co-location, do in-plane prediction */
-            ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_BSKIP, BLK_16X16, 1);
-            ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_BSKIP, BLK_16X16, 0);
+            ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_BSKIP, BLK_16X16, 3);
+            ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_BSKIP, BLK_16X16, 1);
         } else
             /* direct prediction from co-located P MB, block-wise */
             for (block = 0; block < 4; block++)
                 mv_pred_direct(h, &h->mv[mv_scan[block]],
-                               &h->col_mv[h->mbidx * 4 + block]);
+                               &h->col_mv[h->field][h->mbidx * 4 + block]);
+        /*
         h->mv[MV_FWD_X0].ref = 0;
         h->mv[MV_FWD_X1].ref = 0;
         h->mv[MV_FWD_X2].ref = 0;
         h->mv[MV_FWD_X3].ref = 0;
+        */
         break;
     case B_FWD_16X16:
         ref[0] = get_ref_b(h, MV_FWD_X0, 1, MV_FWD);
@@ -1057,13 +1115,18 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                     h->mv[mv_scan[block] + MV_BWD_OFFS].ref = -1;
             }
         for (block = 0; block < 4; block++)
-            if (sub_type[block] == B_SUB_BWD)
+            if (sub_type[block] == B_SUB_BWD) {
                 ref[block] = get_ref_b(h, mv_scan[block] + MV_BWD_OFFS, 0, MV_BWD);
+                
+                    h->mv[mv_scan[block]].ref = -1;
+                    h->mv[mv_scan[block] + MV_BWD_OFFS].ref = ref[block];
+                
+            }
 
         for (block = 0; block < 4; block++) {
             switch (sub_type[block]) {
             case B_SUB_DIRECT:
-                if (!h->col_type_base[h->mbidx]) {
+                if (!h->col_type_base[h->field][h->mbidx]) {
                     /* intra MB at co-location, do in-plane prediction */
                     if(flags==0) {
                         // if col-MB is a Intra MB, current Block size is 16x16.
@@ -1073,10 +1136,10 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                             h->mv[TMP_UNUSED_INX + MV_BWD_OFFS] = h->mv[MV_FWD_X0 + MV_BWD_OFFS];
                         }
                         ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2,
-                                   MV_PRED_BSKIP, BLK_8X8, 1);
+                                   MV_PRED_BSKIP, BLK_8X8, 3);
                         ff_cavs_mv(h, MV_FWD_X0+MV_BWD_OFFS,
                                    MV_FWD_C2+MV_BWD_OFFS,
-                                   MV_PRED_BSKIP, BLK_8X8, 0);
+                                   MV_PRED_BSKIP, BLK_8X8, 1);
                         if(block>0) {
                             flags = mv_scan[block];
                             h->mv[flags              ] = h->mv[MV_FWD_X0              ];
@@ -1091,9 +1154,13 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                     }
                 } else
                     mv_pred_direct(h, &h->mv[mv_scan[block]],
-                                   &h->col_mv[h->mbidx * 4 + block]);
+                                   &h->col_mv[h->field][h->mbidx * 4 + block]);
+
                 h->mv[mv_scan[block]].ref = 0;
                 h->mv[mv_scan[block] + MV_BWD_OFFS].ref = 0;
+                h->mv[mv_scan[block]].rx = 0;
+                h->mv[mv_scan[block]].ry = 0;
+
                 break;
             case B_SUB_FWD:
                 ff_cavs_mv(h, mv_scan[block], mv_scan[block] - 3,
@@ -1387,8 +1454,10 @@ static int decode_pic(AVSContext *h)
     }
     h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
     ref++;
-    if(h->pic_structure)
+    if(!h->pic_structure)
         h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
+    for(int xxx = 0; xxx < 4;xxx++)
+        printf("dist: %d ref: %d poc: %d\n", h->dist[xxx], xxx, h->DPB[xxx].poc);
     h->scale_den[0] = h->dist[0] ? 512/h->dist[0] : 0;
     h->scale_den[1] = h->dist[1] ? 512/h->dist[1] : 0;
     h->scale_den[2] = h->dist[2] ? 512/h->dist[2] : 0;
@@ -1402,6 +1471,8 @@ static int decode_pic(AVSContext *h)
     } else {
         h->direct_den[0] = h->dist[0] ? 16384 / h->dist[0] : 0;
         h->direct_den[1] = h->dist[1] ? 16384 / h->dist[1] : 0;
+        h->direct_den[2] = h->dist[2] ? 16384 / h->dist[2] : 0;
+        h->direct_den[3] = h->dist[3] ? 16384 / h->dist[3] : 0;
     }
 
     if (h->low_delay)
@@ -1623,12 +1694,20 @@ static int decode_pic(AVSContext *h)
             int cur_poc = h->cur.poc;
             printf("Here we go again!\n");
             //get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
-            for(int i = 0; i < 16; i++) {
+            if(h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
+            for(int i = 0; i < 128; i++) {
                 if ((show_bits_long(&h->gb, 24) & 0xFFFFFF) == 0x000001) {
                     printf("Had to eat %d bits...\n", i);
                     break;
                 }
                 get_bits(&h->gb, 1);
+            }
+            } else {
+                for(int i = 0; i < AEC_CONTEXTS; i++) {
+                    aec_init_aecctx(&h->aec.aecctx[i]);
+                }
+                // mark AEC decoder as not initialized
+                h->aec.aecdec.initialized = false;
             }
             skip_count = -1;
             if (h->cur.f->pict_type == AV_PICTURE_TYPE_B) {
@@ -1645,6 +1724,7 @@ static int decode_pic(AVSContext *h)
                         memcpy(h->combined.f->data[2] + ((y + 0) * h->c_stride), h->cur.f->data[2] + y/2 * h->c_stride   , h->c_stride);
                     }
                 }
+                h->field = 1;
             } else {
                 av_frame_unref(h->DPB[3].f);
                 FFSWAP(AVSFrame, h->cur, h->DPB[3]);
@@ -1653,8 +1733,8 @@ static int decode_pic(AVSContext *h)
                 FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
             
                 ff_get_buffer(h->avctx, h->cur.f, AV_GET_BUFFER_FLAG_REF);
-                ret = ff_cavs_init_pic(h);
             }
+            ret = ff_cavs_init_pic(h);
             printf("pict_type o_o: %d\n", old_pic_type);
             h->cur.f->pict_type = old_pic_type;
             if (old_pic_type == AV_PICTURE_TYPE_I)
@@ -1702,6 +1782,8 @@ static int decode_pic(AVSContext *h)
             } else {
                 h->direct_den[0] = h->dist[0] ? 16384 / h->dist[0] : 0;
                 h->direct_den[1] = h->dist[1] ? 16384 / h->dist[1] : 0;
+                h->direct_den[2] = h->dist[2] ? 16384 / h->dist[2] : 0;
+                h->direct_den[3] = h->dist[3] ? 16384 / h->dist[3] : 0;
             }
             printf("0 Dist, scale: %d %d\n", h->dist[0], h->scale_den[0]);
             printf("1 Dist, scale: %d %d\n", h->dist[1], h->scale_den[1]);
