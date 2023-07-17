@@ -94,9 +94,9 @@ int cavs_aec_read_mb_reference_index_b(Aec *aec, GetBitContext *gb, int refA, in
     int ctx;
     int symbol = 0;
     // TODO: Remove
-    if(refA == -1)
+    if(refA < 0)
         refA = 0;
-    if(refB == -1)
+    if(refB < 0)
         refB = 0;
     //aec_log(&aec->aecdec, "refA", refA);
     //aec_log(&aec->aecdec, "refB", refB);

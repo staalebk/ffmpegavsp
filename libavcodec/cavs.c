@@ -484,7 +484,7 @@ static inline void mc_part_std(AVSContext *h, int chroma_height, int delta,
     }
 
     if ((mv + MV_BWD_OFFS)->ref >= 0) {
-        AVFrame *ref = h->DPB[0].f;
+        AVFrame *ref = h->DPB[(mv + MV_BWD_OFFS)->ref].f;
         mc_dir_part(h, ref, chroma_height, delta, 1,
                     dest_y, dest_cb, dest_cr, x_offset, y_offset,
                     qpix_op, chroma_op, mv + MV_BWD_OFFS);
@@ -584,7 +584,7 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
     mvP->ref  = ref;
     mvP->dist = h->dist[mvP->ref];
     /* If mvC is not available, replace it with mvD */
-    if ((mvC->ref == NOT_AVAIL && mvC->direction != REF_INTRA)|| (nP == MV_FWD_X3) || (nP == MV_BWD_X3 )) {
+    if (mvC->ref == NOT_AVAIL || (nP == MV_FWD_X3) || (nP == MV_BWD_X3 )) {
         mvC = &h->mv[nP - 5];  // set to top-left (mvD)
     }
     /*
@@ -595,7 +595,9 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
          (mvB->x | mvB->y | mvB->ref) == 0)) {
     */
     if (mode == MV_PRED_PSKIP &&
-         ((mvA->x | mvA->y | mvA->ref) == 0 ||
+        (mvA->ref == NOT_AVAIL ||
+         mvB->ref == NOT_AVAIL ||
+         (mvA->x | mvA->y | mvA->ref) == 0 ||
          (mvB->x | mvB->y | mvB->ref) == 0)) {
         mvP2 = &un_mv;
     /* if there is only one suitable candidate, take it */
