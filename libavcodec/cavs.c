@@ -623,8 +623,6 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
     if (mode < MV_PRED_PSKIP) {
         int mx;
         int my;
-        int rx;
-        int ry;
         if(!h->aec_enable) {
             mx = get_se_golomb(&h->gb) + (unsigned)mvP->x;
             my = get_se_golomb(&h->gb) + (unsigned)mvP->y;
@@ -637,8 +635,6 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
             }
             mx = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_X, mvdax);// + (unsigned)mvP->x;
             my = cavs_aec_read_mv_diff(&h->aec, &h->gb, MV_DIFF_Y, mvday);// + (unsigned)mvP->y;
-            rx = mx;
-            ry = my;
 
             mvP->rx = mx;
             mvP->ry = my;
@@ -769,9 +765,9 @@ int ff_cavs_next_mb(AVSContext *h)
         h->cy = h->cur.f->data[0] + h->mby * 16 * h->l_stride;
         h->cu = h->cur.f->data[1] + h->mby * 8 * h->c_stride;
         h->cv = h->cur.f->data[2] + h->mby * 8 * h->c_stride;
-        printf("\t\t\t--------------- %d %d\n", h->mby, h->mb_height);
+        //printf("\t\t\t--------------- %d %d\n", h->mby, h->mb_height);
         if (h->mby == h->mb_height) { // Frame end
-            printf("Frame end!\n");
+            //printf("Frame end!\n");
             return 0;
         }
     }

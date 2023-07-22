@@ -54,18 +54,18 @@ int dbg_get_bits(GetBitContext *gb, int n, const char *c, bool dbg, FILE *f){
 void aec_init_aecdec(AecDec *aecdec, GetBitContext *gb) {
     //const char *filename = "dbg.txt";
     char filename[50];
-    printf("Initializing AEC decoder!\n");
+    aecdec->debug = false;
     // Debugging code:
     if(aecdec->f != NULL)
         fclose(aecdec->f);
-    snprintf(filename, 49, "dbg%d.txt", aecdec->dframe++);
-    printf("DEBUG ------------- DEBUG -------------- DEBUG ---------- %s\n", filename);
-    aecdec->f = fopen(filename, "w");
-    aecdec->debug = true;
-
-    if(aecdec->f == NULL) {
-        printf("Error opening debug file %s.\n", filename);
-        exit(1);
+    snprintf(filename, 49, "/tmp/dbg%d.txt", aecdec->dframe++);
+    //printf("DEBUG ------------- DEBUG -------------- DEBUG ---------- %s\n", filename);
+    if(aecdec->debug) {
+        aecdec->f = fopen(filename, "w");
+        if(aecdec->f == NULL) {
+            printf("Error opening debug file %s.\n", filename);
+            exit(1);
+        }
     }
     aecdec->rS1 = 0;
     aecdec->rT1 = 0xFF;
@@ -185,7 +185,7 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
 			aecdec->valueT = aecdec->valueT - rT2;
 		else
 			aecdec->valueT = 256 + ((aecdec->valueT << 1 ) | dbg_get_bits(gb,1, "b1", dbg, aecdec->f)) - rT2;
-		while ( tRlps < 0x100 ) {
+		while ( tRlps < 0x100 && get_bits_left(gb) > 0) {
 			tRlps = tRlps << 1;
 			aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"b2", dbg, aecdec->f);
 		}
@@ -198,7 +198,7 @@ int aec_decode_bin_debug(AecDec *aecdec, GetBitContext *gb, int contextWeighting
 	if ( binVal != predMps || ( binVal == predMps && aecdec->bFlag == 1 && rS2 == aecdec->boundS ) ) {
 		aecdec->rS1 = 0;
 		aecdec->valueS = 0;
-		while ( aecdec->valueT < 0x100 ) {
+		while ( aecdec->valueT < 0x100 && get_bits_left(gb) > 0) {
 			aecdec->valueS++;
 			aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"b3", dbg, aecdec->f);
 		}
@@ -257,17 +257,19 @@ int aec_decode_bypass_debug(AecDec *aecdec, GetBitContext *gb, bool dbg) {
             aecdec->valueT = aecdec->valueT - rT2;
         else
             aecdec->valueT = ((aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by1", dbg, aecdec->f)) - rT2 + 256;
-        while ( tRlps < 0x100 ) {
+        while ( tRlps < 0x100 && get_bits_left(gb) > 0) {
             tRlps = tRlps << 1;
             aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by2", dbg, aecdec->f);
         }
         aecdec->rS1 = 0;
         aecdec->rT1 = tRlps & 0xFF;
         aecdec->valueS = 0;
-        while ( aecdec->valueT < 0x100 ) {
+        while ( aecdec->valueT < 0x100 && get_bits_left(gb) > 0) {
             aecdec->valueS++;
             aecdec->valueT = (aecdec->valueT << 1 ) | dbg_get_bits(gb,1,"by3", dbg, aecdec->f);
         }
+        if(!aecdec->valueT) // Must have ran out of bits.
+            return 0;
         aecdec->valueT = aecdec->valueT & 0xFF;
     } else {
         binVal = predMps;
@@ -312,14 +314,14 @@ int aec_decode_stuffing_bit(AecDec *aecdec, GetBitContext *gb, bool dbg) {
             aecdec->valueT = aecdec->valueT - rT2;
         else
             aecdec->valueT = 256 + ((aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb1", dbg, aecdec->f)) - rT2;
-        while ( tRlps < 0x100 ) {
+        while ( tRlps < 0x100 && get_bits_left(gb) > 0) {
             tRlps = tRlps << 1;
             aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb2", dbg, aecdec->f);
         }
         aecdec->rS1 = 0;
         aecdec->rT1 = tRlps & 0xFF;
         aecdec->valueS = 0;
-        while ( aecdec->valueT < 0x100 ) {
+        while ( aecdec->valueT < 0x100 && get_bits_left(gb) > 0) {
             aecdec->valueS++;
             aecdec->valueT = (aecdec->valueT << 1) | dbg_get_bits(gb,1,"sb3", dbg, aecdec->f);
         }

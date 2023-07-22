@@ -502,8 +502,8 @@ static inline void mv_pred_direct(AVSContext *h, cavs_vector *pmv_fw,
         fw_ref = 3;
     if(h->field)
         fw_ref = 2;
-    printf("h-field: %d, col_mv->ref: %d\n", h->field, col_mv->ref);
-    printf("col_mv: %d %d %d\n", col_mv->x, col_mv->y, col_mv->dist);
+    //printf("h-field: %d, col_mv->ref: %d\n", h->field, col_mv->ref);
+    //printf("col_mv: %d %d %d\n", col_mv->x, col_mv->y, col_mv->dist);
     /*
     if (h->field == 0 && (col_mv->ref == 0 || col_mv->ref == 2))
         delta1 = 2;
@@ -521,7 +521,7 @@ static inline void mv_pred_direct(AVSContext *h, cavs_vector *pmv_fw,
     if (h->field)
         deltaBw = -2;
     //TODO: deltaBw is always 0 
-    printf("delta1: %d fw: %d bw: %d\n", delta1, deltaFw, deltaBw);
+    //printf("delta1: %d fw: %d bw: %d\n", delta1, deltaFw, deltaBw);
 
     if (col_mv->x < 0) {
         pmv_fw->x = -(((16384/col_mv->dist) * (1 - col_mv->x * h->dist[fw_ref])-1)>>14);
@@ -543,7 +543,7 @@ static inline void mv_pred_direct(AVSContext *h, cavs_vector *pmv_fw,
     pmv_fw->ref = fw_ref;
     pmv_bw->ref = bw_ref;
     //printf("pred_direct fwd: %d %d %d %d bwd: %d %d %d %d\n", pmv_fw->x, pmv_fw->y, pmv_fw->ref, pmv_fw->dist, pmv_bw->x, pmv_bw->y, pmv_bw->ref, pmv_bw->dist);
-    printf("pred_direct fwd: %d %d %d bwd: %d %d %d\n", pmv_fw->x, pmv_fw->y, pmv_fw->dist, pmv_bw->x, pmv_bw->y, pmv_bw->dist);
+    //printf("pred_direct fwd: %d %d %d bwd: %d %d %d\n", pmv_fw->x, pmv_fw->y, pmv_fw->dist, pmv_bw->x, pmv_bw->y, pmv_bw->dist);
     //printf("mv_pred_direct: pred fwd: %d %d bwd: %d %d dist: %d %d col: %d %d %d coldist: %d\n", pmv_fw->x, pmv_fw->y, pmv_bw->x, pmv_bw->y, pmv_fw->dist, pmv_bw->dist, col_mv->x, col_mv->y, col_mv->ref, col_mv->dist);
 }
 
@@ -706,6 +706,8 @@ static int decode_residual_block(AVSContext *h, GetBitContext *gb,
                 }
                 contextWeighting = 0;
                 ctxIdxInc = priIdx*3 + secIdx - (priIdx != 0);
+                if(absLevel > 32767) // Error! handle this
+                    return 0;
             }
             if(!pos)
                 absLevel++;
@@ -735,6 +737,8 @@ static int decode_residual_block(AVSContext *h, GetBitContext *gb,
                 run++;
                 if(run == 1)
                     ctxIdxInc++;
+                if((run + pos) >= 64) // Error! handle this
+                    return 0;
             }
             aec_log(&h->aec.aecdec, "run", run);
             level_buf[i] = sign * absLevel;
@@ -745,8 +749,11 @@ static int decode_residual_block(AVSContext *h, GetBitContext *gb,
             run_buf[i] = run + 1; //TODO: +1 belongs in the dequant part according to spec, not sure why the original code is as it is.
 
             pos += run + 1;
-            if(pos >= 64)
+            if(pos >= 64) {
                 pos = 63;
+                //printf("BBBBBQ BBBBBQ BBBBBBBBBBBBBQ BBBBBBBBBBBBBQ fixme!!!!\n");
+                //break;
+            }
         }
     }
     if ((ret = dequant(h, level_buf, run_buf, block, dequant_mul[qp],
@@ -926,12 +933,10 @@ static int decode_mb_i(AVSContext *h, int cbp_code)
 
     ret = decode_residual_chroma(h);
     if (ret < 0)
-        printf("BBQ?? Fixme fixme\n");
-    if (ret < 0)
         return ret;
     if(h->aec_enable) {
         if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false)) {
-            printf("stuffing : %d\n", ret);
+            //printf("stuffing : %d\n", ret);
             //aec_debug(&h->aec.aecdec, NULL, NULL);
         }
     }
@@ -1054,7 +1059,7 @@ static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
         decode_residual_inter(h);
     ff_cavs_filter(h, mb_type);
     h->col_type_base[h->field][h->mbidx] = mb_type;
-    printf("h->field: %d\n", h->field);
+    //printf("h->field: %d\n", h->field);
 }
 
 static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
@@ -1076,7 +1081,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
     switch (mb_type) {
     case B_SKIP:
     case B_DIRECT:
-        printf("field: %d mbidx: %d type: %d\n", h->field, h->mbidx, h->col_type_base[h->field][h->mbidx]);
+        //printf("field: %d mbidx: %d type: %d\n", h->field, h->mbidx, h->col_type_base[h->field][h->mbidx]);
         if (!h->col_type_base[0][h->mbidx]) {
             /* intra MB at co-location, do in-plane prediction */
             ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_BSKIP, BLK_16X16, 2);
@@ -1331,8 +1336,8 @@ static inline int decode_slice_header(AVSContext *h, GetBitContext *gb)
         h->qp       = get_bits(gb, 6);
         h->qp_delta_last = 0;
         h->qp_delta = 0;
-        printf("fixed_slice_qp: %d\n", h->qp_fixed);
-        printf("slice_qp: %d\n", h->qp);
+        //printf("fixed_slice_qp: %d\n", h->qp_fixed);
+        //printf("slice_qp: %d\n", h->qp);
     }
     /* inter frame or second slice can have weighting params */
     if ((h->cur.f->pict_type != AV_PICTURE_TYPE_I) || h->field)
@@ -1340,15 +1345,15 @@ static inline int decode_slice_header(AVSContext *h, GetBitContext *gb)
             av_log(h->avctx, AV_LOG_ERROR,
                    "weighted prediction not yet supported\n");
         } else {
-            printf("slice_weighting_flag is 0\n");
+            //printf("slice_weighting_flag is 0\n");
         }
     /* AEC needs to be aligned*/
     if (h->aec_enable) {
         align = (-get_bits_count(gb)) & 7;
         //int off = get_bits_count(gb);
-        printf("New slice!\n");
-        printf("Offset: %d\n", align);
-        printf("bitcontext: %d\n", gb->size_in_bits);
+        //printf("New slice!\n");
+        //printf("Offset: %d\n", align);
+        //printf("bitcontext: %d\n", gb->size_in_bits);
         get_bits(gb, align);
         //printf("Bits: %d\n", bits); //TODO BBQ This seems wrong. this bit should be 1... something is wrong.. Maybe bitstream?
         //skip_bits(gb, -get_bits_count(gb) & 7);
@@ -1358,8 +1363,6 @@ static inline int decode_slice_header(AVSContext *h, GetBitContext *gb)
         }
         // mark AEC decoder as not initialized
         h->aec.aecdec.initialized = false;
-        if (h->qp == 21)
-            aec_debug(&h->aec.aecdec, NULL, NULL);
     }
     return 0;
 }
@@ -1387,7 +1390,7 @@ static inline int check_for_slice(AVSContext *h)
 
         if (h->stc >= h->mb_height * (h->pic_structure ? 1 : 2))
             return 0;
-        printf("\t\t\t\tBBQBBQBBQBBQBBQBBQ %d !!!!!!!!!!!!!!\n", h->stc);
+        //printf("\t\t\t\tBBQBBQBBQBBQBBQBBQ %d !!!!!!!!!!!!!!\n", h->stc);
         decode_slice_header(h, gb);
         return 1;
     }
@@ -1418,11 +1421,11 @@ static int decode_pic(AVSContext *h)
 
     skip_bits(&h->gb, 16); //bbv_delay
     if (h->profile == CAVS_PROFILE_GUANGDIAN) {
-        printf("marker_bit1030: %d\n", get_bits(&h->gb, 1)); //marker_bit
-        printf("bbv_delay_extension: %d\n", get_bits(&h->gb, 7)); //bbv_delay_extension
+        get_bits(&h->gb, 1); //marker_bit
+        get_bits(&h->gb, 7); //bbv_delay_extension
     }
     if (h->stc == PIC_PB_START_CODE) {
-        printf("PB-frame!\n");
+        //printf("PB-frame!\n");
         h->cur.f->pict_type = get_bits(&h->gb, 2) + AV_PICTURE_TYPE_I;
         if (h->cur.f->pict_type > AV_PICTURE_TYPE_B) {
             av_log(h->avctx, AV_LOG_ERROR, "illegal picture type\n");
@@ -1433,7 +1436,7 @@ static int decode_pic(AVSContext *h)
            (!h->DPB[1].f->data[0] && h->cur.f->pict_type == AV_PICTURE_TYPE_B))
             return AVERROR_INVALIDDATA;
     } else {
-        printf("I-frame!\n");
+        //printf("I-frame!\n");
         h->cur.f->pict_type = AV_PICTURE_TYPE_I;
         if (get_bits1(&h->gb))
             skip_bits(&h->gb, 24);//time_code
@@ -1446,7 +1449,7 @@ static int decode_pic(AVSContext *h)
             h->stream_revision = 1;
         if (h->stream_revision > 0)
             skip_bits(&h->gb, 1); //marker_bit
-        printf("Stream_revision: %d\n", h->stream_revision);
+        //printf("Stream_revision: %d\n", h->stream_revision);
     }
 
     ret = ff_get_buffer(h->avctx, h->cur.f, h->cur.f->pict_type == AV_PICTURE_TYPE_B ?
@@ -1464,7 +1467,7 @@ static int decode_pic(AVSContext *h)
     if ((ret = ff_cavs_init_pic(h)) < 0)
         return ret;
     h->cur.poc = get_bits(&h->gb, 8) * 2;
-    printf("poc: %d\n", h->cur.poc);
+    //printf("poc: %d\n", h->cur.poc);
     /* get temporal distances and MV scaling factors */
     if (h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
         h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
@@ -1485,8 +1488,6 @@ static int decode_pic(AVSContext *h)
     ref++;
     if(!h->pic_structure)
         h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
-    for(int xxx = 0; xxx < 4;xxx++)
-        printf("dist: %d ref: %d poc: %d\n", h->dist[xxx], xxx, h->DPB[xxx].poc);
     h->scale_den[0] = h->dist[0] ? 512/h->dist[0] : 0;
     h->scale_den[1] = h->dist[1] ? 512/h->dist[1] : 0;
     h->scale_den[2] = h->dist[2] ? 512/h->dist[2] : 0;
@@ -1551,20 +1552,15 @@ static int decode_pic(AVSContext *h)
                 "weighting_quant_flag not yet supported\n");
         }
         h->aec_enable = get_bits1(&h->gb);
-        if(h->aec_enable){
-            printf("aec_enable\n");
-        } else {
-            printf("no aec_enable\n");
-        }
     }
 
     ret = 0;
     do {
         if (h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
-            printf("Decoding I-frame\n");
+            //printf("Decoding I-frame\n");
             do {
                 if(check_for_slice(h)) {
-                    printf("SLICE!\n");
+                    //printf("SLICE!\n");
 
                 }
                 if (!h->pic_structure && h->mby >= h->mb_width / 2)
@@ -1573,18 +1569,18 @@ static int decode_pic(AVSContext *h)
                 if (ret < 0)
                     break;
                 if(ret == 1){
-                    printf("BBQ?\n");
+                    //printf("BBQ?\n");
                 }
             } while (ff_cavs_next_mb(h));
-            printf("End of I-frame...\n");
+            //printf("End of I-frame...\n");
             //return 1;
         } else if (h->cur.f->pict_type == AV_PICTURE_TYPE_P) {
-            printf("Decoding P-frame\n");
+            //printf("Decoding P-frame\n");
             do {
                 //if(h->mbidx >= 579)
                 //    aec_debug(&h->aec.aecdec, NULL, NULL);
                 if (check_for_slice(h)) {
-                    printf("PSLICE!\n");
+                    //printf("PSLICE!\n");
                     skip_count = -1;
                 }
                 if (h->skip_mode_flag && (skip_count < 0)) {
@@ -1603,17 +1599,16 @@ static int decode_pic(AVSContext *h)
                             decode_mb_p(h, P_SKIP);
                             ret = ff_cavs_next_mb(h);
                             if(!ret) {
-                                printf("boo0\n");
+                                //printf("boo0\n");
                                 break;
                             }
                         }
                         if(!ret) {
-                            printf("boboo\n");
+                            //printf("boboo\n");
                             break;
                         }
                         if (read_stuffing) {
-                            if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
-                                printf("stuffing is 1\n");
+                            aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false);
                         }
                     }
                 } //else {
@@ -1633,19 +1628,17 @@ static int decode_pic(AVSContext *h)
                         decode_mb_p(h, mb_type);
                 //}
                         if(h->aec_enable) {
-                            if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
-                                printf("stuffing...\n");
+                            aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false);
                         }
                 }
                 if (ret < 0)
                     break;
-                if(h->mby == 35)
-                    return 1;
             } while (ff_cavs_next_mb(h));
-            printf("End of P-frame: %d\n", ret);
+            //printf("End of P-frame: %d\n", ret);
+            ret = 0;
             //return 1;
         } else { /* AV_PICTURE_TYPE_B */
-            printf("Decoding B-frame --------------------<<<<<<<<<<<<<<<<<<<<<<\n");
+            //printf("Decoding B-frame --------------------<<<<<<<<<<<<<<<<<<<<<<\n");
             do {
                 if (check_for_slice(h))
                     skip_count = -1;
@@ -1666,17 +1659,16 @@ static int decode_pic(AVSContext *h)
                             decode_mb_b(h, B_SKIP);
                             ret = ff_cavs_next_mb(h);
                             if(!ret) {
-                                printf("booB0\n");
+                                //printf("booB0\n");
                                 break;
                             }
                         }
                         if(!ret) {
-                            printf("boboo\n");
+                            //printf("boboo\n");
                             break;
                         }
                         if (read_stuffing) {
-                            if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
-                                printf("stuffing is 1\n");
+                            aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false);
                         }
                     }
                 }
@@ -1708,29 +1700,32 @@ static int decode_pic(AVSContext *h)
                 //}
             
                         if(h->aec_enable) {
-                            if(aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false))
-                                printf("stuffing...\n");
+                            aec_decode_stuffing_bit(&h->aec.aecdec, &h->gb, false);
                         }
                     }
                 if (ret < 0)
                     break;
             } while (ff_cavs_next_mb(h));
-            printf("End of B-frame: %d\n", ret);
+            //printf("End of B-frame: %d\n", ret);
         }
         //if (!h->pic_structure && h->cur.f->pict_type == AV_PICTURE_TYPE_I) {
         if (!h->pic_structure && fields > 1) {
             int old_pic_type = h->cur.f->pict_type;
             int cur_poc = h->cur.poc;
-            printf("Here we go again!\n");
+            //printf("Here we go again!\n");
             //get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
             //if(1 || h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
-            for(int i = 0; i < 16; i++) {
+            int notfound = true;
+            for(int i = 0; i < 990000; i++) {
                 if ((show_bits_long(&h->gb, 24) & 0xFFFFFF) == 0x000001) {
-                    printf("Had to eat %d bits...\n", i);
+                    //printf("Had to eat %d bits...\n", i);
+                    notfound = false;
                     break;
                 }
                 get_bits(&h->gb, 1);
             }
+            //if (notfound)
+            //    printf("Had to eat inf?! bits...\n");
             /*
             } else {
                 for(int i = 0; i < AEC_CONTEXTS; i++) {
@@ -1748,6 +1743,7 @@ static int decode_pic(AVSContext *h)
                         return ret;    
                 }
                 h->combined.f->pict_type = h->cur.f->pict_type;
+                h->combined.poc = h->cur.poc;
                 for(int y = 0; y < h->avctx->height; y+=2) {
                     memcpy(h->combined.f->data[0] + ((y + 0) * h->l_stride), h->cur.f->data[0] + y/2 * h->l_stride   , h->l_stride);
                     if (y < (h->avctx->height-2)/2) {
@@ -1765,12 +1761,12 @@ static int decode_pic(AVSContext *h)
                 ff_get_buffer(h->avctx, h->cur.f, AV_GET_BUFFER_FLAG_REF);
             }
             ret = ff_cavs_init_pic(h);
-            printf("pict_type o_o: %d\n", old_pic_type);
+            //printf("pict_type o_o: %d\n", old_pic_type);
             h->cur.f->pict_type = old_pic_type;
             if (old_pic_type == AV_PICTURE_TYPE_I)
                 h->cur.f->pict_type = AV_PICTURE_TYPE_P;
             h->cur.poc = cur_poc + 1;
-            printf("poc: %d\n", h->cur.poc);
+            //printf("poc: %d\n", h->cur.poc);
             h->mby = 0;
             //h->ref_flag = 1;
 
@@ -1797,8 +1793,6 @@ static int decode_pic(AVSContext *h)
             ref++;
             if(!h->pic_structure)
                 h->dist[ref] = (h->cur.poc - h->DPB[ref].poc) & 511;
-            for(int xxx = 0; xxx < 4;xxx++)
-                printf("dist: %d ref: %d poc: %d\n", h->dist[xxx], xxx, h->DPB[xxx].poc);
             h->scale_den[0] = h->dist[0] ? 512/h->dist[0] : 0;
             h->scale_den[1] = h->dist[1] ? 512/h->dist[1] : 0;
             h->scale_den[2] = h->dist[2] ? 512/h->dist[2] : 0;
@@ -1815,12 +1809,11 @@ static int decode_pic(AVSContext *h)
                 h->direct_den[2] = h->dist[2] ? 16384 / h->dist[2] : 0;
                 h->direct_den[3] = h->dist[3] ? 16384 / h->dist[3] : 0;
             }
-            printf("0 Dist, scale: %d %d\n", h->dist[0], h->scale_den[0]);
-            printf("1 Dist, scale: %d %d\n", h->dist[1], h->scale_den[1]);
+            //printf("0 Dist, scale: %d %d\n", h->dist[0], h->scale_den[0]);
+            //printf("1 Dist, scale: %d %d\n", h->dist[1], h->scale_den[1]);
             }
         }
     } while (--fields);
-    printf("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBQ %d\n", ret);
     //get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
     emms_c();
     if (ret >= 0 && h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
@@ -1832,6 +1825,7 @@ static int decode_pic(AVSContext *h)
             }
 
             h->combined.f->pict_type = h->DPB[0].f->pict_type;
+            h->combined.poc = h->DPB[0].poc;
             for(int y = 0; y < h->avctx->height; y+=2) {
                 memcpy(h->combined.f->data[0] + ((y + 0) * h->l_stride), h->DPB[0].f->data[0] + y/2 * h->l_stride, h->l_stride);
                 memcpy(h->combined.f->data[0] + ((y + 1) * h->l_stride), h->cur.f->data[0] + y/2 * h->l_stride   , h->l_stride);
@@ -1848,7 +1842,6 @@ static int decode_pic(AVSContext *h)
         FFSWAP(AVSFrame, h->DPB[2], h->DPB[3]);
         FFSWAP(AVSFrame, h->DPB[1], h->DPB[2]);
         FFSWAP(AVSFrame, h->DPB[0], h->DPB[1]);
-        printf("Deinterlacing and bufferstuff done\n");
     }
     if (ret >= 0 && h->cur.f->pict_type == AV_PICTURE_TYPE_B) {
         if(!h->progressive) {
@@ -1874,7 +1867,6 @@ static int decode_pic(AVSContext *h)
             }
             */
         }
-        printf("Deinterlacing and bufferstuff B done\n");
     }
     return ret;
 }
@@ -1973,14 +1965,11 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
     const uint8_t *buf_ptr;
     int frame_start = 0;
 
-    printf("------------------------ cavs_decode_frame ---------------\n");
     if (buf_size == 0) {
-        printf("Buffer == 0\n");
-        if (!h->low_delay && h->combined.f->data[0]) {
+        if (!h->low_delay && h->combined_ip.f->data[0]) {
             *got_frame = 1;
             av_frame_move_ref(rframe, h->combined_ip.f);
         }
-        printf("---------------------------- cavs_decode_frame return: 0 ----\n");
         return 0;
     }
 
@@ -1990,19 +1979,20 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
     buf_end = buf + buf_size;
     for(;;) {
         buf_ptr = avpriv_find_start_code(buf_ptr, buf_end, &stc);
-        printf("Loop de loop cavs_decode_frame: %ld %ld\n", buf_ptr - buf, buf_end - buf_ptr);
+        //printf("Loop de loop cavs_decode_frame: %ld %ld\n", buf_ptr - buf, buf_end - buf_ptr);
         if ((stc & 0xFFFFFE00) || buf_ptr == buf_end) {
-            printf("bzzz Start code: 0x%04x\n", stc & 0xFF);
+            //printf("bzzz Start code: 0x%04x\n", stc & 0xFF);
+            /*
             if (!h->stc)
                 av_log(h->avctx, AV_LOG_WARNING, "no frame decoded\n");
-            printf("------------------------------- stc or no buf return: %ld\n", buf_ptr - buf);
+            */
+            //printf("------------------------------- stc or no buf return: %ld\n", buf_ptr - buf);
             return FFMAX(0, buf_ptr - buf);
         }
         input_size = (buf_end - buf_ptr) * 8;
-        printf("Start code: 0x%04x\n", stc & 0xFF);
+        //printf("Start code: 0x%04x\n", stc & 0xFF);
         switch (stc) {
         case CAVS_START_CODE:
-            printf("Sequence start\n");
             init_get_bits(&h->gb, buf_ptr, input_size);
             decode_seq_header(h);
             break;
@@ -2015,37 +2005,33 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                 h->got_keyframe = 1;
             }
         case PIC_PB_START_CODE:
-            printf("PIC_PB_START\n");
             if (frame_start > 1) {
-                printf("invalid data\n");
                 return AVERROR_INVALIDDATA;
             }
             frame_start ++;
-            if (*got_frame)
+            if (*got_frame) {
                 av_frame_unref(rframe);
+            }
             *got_frame = 0;
             if (!h->got_keyframe)
                 break;
             init_get_bits(&h->gb, buf_ptr, input_size);
             h->stc = stc;
             if (decode_pic(h)) {
-                printf("decode_pic returned non zero\n");
                 break;
             }
-            printf("decode_pic returned zero\n");
             *got_frame = 1;
             if (h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
                 if ( h->combined_ip.f->data[0] /* h->DPB[!h->low_delay].f->data[0] */) {
                     //buf_ptr = avpriv_find_start_code(buf_ptr, buf_end, &stc);
                     //if ((ret = av_frame_ref(rframe, h->DPB[!h->low_delay].f)) < 0)
+                    //printf("imgout I/P-frame: %d\n", h->combined_ip.poc);
                     if ((ret = av_frame_ref(rframe, h->combined_ip.f)) < 0) {
-                        printf("-------------------------- av_frame_ref %d  :/\n", ret);
+                        //printf("-------------------------- av_frame_ref %d  :/\n", ret);
                         av_log(h->avctx, AV_LOG_WARNING, "DBG 4 %d\n", *got_frame);
                         return ret;
                     }
-                    printf("combined should be combined\n");
                 } else {
-                    printf("Did not get a frame, first I/P frame?\n");
                     *got_frame = 0;
                 }
                 //av_frame_unref(h->combined_ip.f);
@@ -2060,21 +2046,18 @@ static int cavs_decode_frame(AVCodecContext *avctx, AVFrame *rframe,
                 */
                 //av_frame_move_ref(rframe, h->combined.f);
                 //*got_frame = 0;
+                //printf("imgout B-frame: %d\n", h->combined.poc);
                 av_frame_ref(rframe, h->combined.f);
                 av_frame_unref(h->combined.f);
-                printf("combined should be combined BB\n");
             }
             break;
         case EXT_START_CODE:
-            printf("SHOULD NOT HAPPEN1\n");
             //mpeg_decode_extension(avctx, buf_ptr, input_size);
             break;
         case USER_START_CODE:
-            printf("SHOULD NOT HAPPEN2\n");
             //mpeg_decode_user_data(avctx, buf_ptr, input_size);
             break;
         default:
-            printf("Default cavs_decode_frame switch\n");
             /*
             if (stc <= SLICE_MAX_START_CODE) {
                 init_get_bits(&h->gb, buf_ptr, input_size);
