@@ -236,7 +236,7 @@ typedef struct AVSContext {
        the same is repeated for backward motion vectors */
     cavs_vector mv[2*4*3];
     cavs_vector *top_mv[2];
-    cavs_vector *col_mv[2];
+    cavs_vector *col_mv;
 
     /** luma pred mode cache
        0:    --  B2  B3

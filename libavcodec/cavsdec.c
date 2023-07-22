@@ -464,10 +464,13 @@ static const struct dec_2dvlc chroma_dec[5] = {
 
 static inline void store_mvs(AVSContext *h)
 {
-    h->col_mv[h->field][h->mbidx * 4 + 0] = h->mv[MV_FWD_X0];
-    h->col_mv[h->field][h->mbidx * 4 + 1] = h->mv[MV_FWD_X1];
-    h->col_mv[h->field][h->mbidx * 4 + 2] = h->mv[MV_FWD_X2];
-    h->col_mv[h->field][h->mbidx * 4 + 3] = h->mv[MV_FWD_X3];
+    // Only save motion vectors if we are in the first field;
+    if(h->field)
+        return;
+    h->col_mv[h->mbidx * 4 + 0] = h->mv[MV_FWD_X0];
+    h->col_mv[h->mbidx * 4 + 1] = h->mv[MV_FWD_X1];
+    h->col_mv[h->mbidx * 4 + 2] = h->mv[MV_FWD_X2];
+    h->col_mv[h->mbidx * 4 + 3] = h->mv[MV_FWD_X3];
 }
 
 static inline void mv_pred_direct(AVSContext *h, cavs_vector *pmv_fw,
@@ -1090,7 +1093,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
             /* direct prediction from co-located P MB, block-wise */
             for (block = 0; block < 4; block++)
                 mv_pred_direct(h, &h->mv[mv_scan[block]],
-                               &h->col_mv[0][h->mbidx * 4 + block]);
+                               &h->col_mv[h->mbidx * 4 + block]);
         /*
         h->mv[MV_FWD_X0].ref = 0;
         h->mv[MV_FWD_X1].ref = 0;
@@ -1177,7 +1180,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
                     }
                 } else
                     mv_pred_direct(h, &h->mv[mv_scan[block]],
-                                   &h->col_mv[0][h->mbidx * 4 + block]);
+                                   &h->col_mv[h->mbidx * 4 + block]);
 
                 //h->mv[mv_scan[block]].ref = 0;
                 //h->mv[mv_scan[block] + MV_BWD_OFFS].ref = 0;
