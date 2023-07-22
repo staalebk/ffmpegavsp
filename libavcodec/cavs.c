@@ -814,7 +814,6 @@ int ff_cavs_init_top_lines(AVSContext *h)
     h->top_pred_C   = av_calloc(h->mb_width,  sizeof(*h->top_pred_C));
     h->top_cbp      = av_calloc(h->mb_width,  sizeof(*h->top_cbp));
     h->top_mb_type  = av_calloc(h->mb_width,  sizeof(*h->top_mb_type));
-    h->nz_coeff     = av_calloc(h->mb_width,  sizeof(*h->nz_coeff));
     h->top_border_y = av_calloc(h->mb_width + 1,  16);
     h->top_border_u = av_calloc(h->mb_width,  10);
     h->top_border_v = av_calloc(h->mb_width,  10);
@@ -828,7 +827,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
         !h->top_border_y || !h->top_border_u || !h->top_border_v ||
         !h->col_mv || !h->col_type_base || !h->block || !h->top_pred_C ||
-        !h->nz_coeff || !h->top_cbp || !h->top_mb_type) {
+        !h->top_cbp || !h->top_mb_type) {
         av_freep(&h->top_qp);
         av_freep(&h->top_mv[0]);
         av_freep(&h->top_mv[1]);
@@ -836,7 +835,6 @@ int ff_cavs_init_top_lines(AVSContext *h)
         av_freep(&h->top_pred_C);
         av_freep(&h->top_cbp);
         av_freep(&h->top_mb_type);
-        av_freep(&h->nz_coeff);
         av_freep(&h->top_border_y);
         av_freep(&h->top_border_u);
         av_freep(&h->top_border_v);
@@ -926,7 +924,6 @@ av_cold int ff_cavs_end(AVCodecContext *avctx)
     av_freep(&h->top_pred_C);
     av_freep(&h->top_cbp);
     av_freep(&h->top_mb_type);
-    av_freep(&h->nz_coeff);
     av_freep(&h->top_border_y);
     av_freep(&h->top_border_u);
     av_freep(&h->top_border_v);

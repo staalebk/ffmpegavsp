@@ -255,7 +255,6 @@ typedef struct AVSContext {
 
     int nz_coeff_A;
     int nz_coeff_B;
-    int *nz_coeff;
     ptrdiff_t l_stride, c_stride;
     int luma_scan[4];
     int qp;
