@@ -584,9 +584,8 @@ void ff_cavs_mv(AVSContext *h, enum cavs_mv_loc nP, enum cavs_mv_loc nC,
     mvP->ref  = ref;
     mvP->dist = h->dist[mvP->ref];
     /* If mvC is not available, replace it with mvD */
-    if (mvC->ref == NOT_AVAIL || (nP == MV_FWD_X3) || (nP == MV_BWD_X3 )) {
+    if (mvC->ref == NOT_AVAIL || (nP == MV_FWD_X3) || (nP == MV_BWD_X3 ))
         mvC = &h->mv[nP - 5];  // set to top-left (mvD)
-    }
     if (mode == MV_PRED_PSKIP &&
         (mvA->ref == NOT_AVAIL ||
          mvB->ref == NOT_AVAIL ||
@@ -823,8 +822,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
     /* alloc space for co-located MVs and types */
     h->col_mv        = av_calloc(h->mb_width * h->mb_height * 2,
                                  4 * sizeof(*h->col_mv));
-    h->col_type_base[0] = av_mallocz(h->mb_width * h->mb_height * 2);
-    h->col_type_base[1] = av_mallocz(h->mb_width * h->mb_height * 2); //TODO FIXME
+    h->col_type_base = av_mallocz(h->mb_width * h->mb_height * 2);
     h->block         = av_mallocz(64 * sizeof(int16_t));
 
     if (!h->top_qp || !h->top_mv[0] || !h->top_mv[1] || !h->top_pred_Y ||
@@ -843,7 +841,7 @@ int ff_cavs_init_top_lines(AVSContext *h)
         av_freep(&h->top_border_u);
         av_freep(&h->top_border_v);
         av_freep(&h->col_mv);
-        av_freep(&h->col_type_base); // TODO: Fixme
+        av_freep(&h->col_type_base);
         av_freep(&h->block);
         return AVERROR(ENOMEM);
     }

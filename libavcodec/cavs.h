@@ -280,7 +280,7 @@ typedef struct AVSContext {
 
     void (*intra_pred_l[8])(uint8_t *d, uint8_t *top, uint8_t *left, ptrdiff_t stride);
     void (*intra_pred_c[7])(uint8_t *d, uint8_t *top, uint8_t *left, ptrdiff_t stride);
-    uint8_t *col_type_base[2];
+    uint8_t *col_type_base;
 
     /* scaling factors for MV prediction */
     int sym_factor;    ///< for scaling in symmetrical B block

@@ -838,8 +838,8 @@ static inline void set_mv_intra(AVSContext *h)
     set_mvs(&h->mv[MV_FWD_X0], BLK_16X16);
     h->mv[MV_BWD_X0] = ff_cavs_intra_mv;
     set_mvs(&h->mv[MV_BWD_X0], BLK_16X16);
-    if (h->cur.f->pict_type != AV_PICTURE_TYPE_B)
-        h->col_type_base[h->field][h->mbidx] = I_8X8;
+    if (h->cur.f->pict_type != AV_PICTURE_TYPE_B && !h->field)
+        h->col_type_base[h->mbidx] = I_8X8;
 }
 
 static int decode_mb_i(AVSContext *h, int cbp_code)
@@ -1061,7 +1061,8 @@ static void decode_mb_p(AVSContext *h, enum cavs_mb mb_type)
     if (mb_type != P_SKIP)
         decode_residual_inter(h);
     ff_cavs_filter(h, mb_type);
-    h->col_type_base[h->field][h->mbidx] = mb_type;
+    if (!h->field)
+        h->col_type_base[h->mbidx] = mb_type;
     //printf("h->field: %d\n", h->field);
 }
 
@@ -1085,7 +1086,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
     case B_SKIP:
     case B_DIRECT:
         //printf("field: %d mbidx: %d type: %d\n", h->field, h->mbidx, h->col_type_base[h->field][h->mbidx]);
-        if (!h->col_type_base[0][h->mbidx]) {
+        if (!h->col_type_base[h->mbidx]) {
             /* intra MB at co-location, do in-plane prediction */
             ff_cavs_mv(h, MV_FWD_X0, MV_FWD_C2, MV_PRED_BSKIP, BLK_16X16, 2);
             ff_cavs_mv(h, MV_BWD_X0, MV_BWD_C2, MV_PRED_BSKIP, BLK_16X16, 1);
@@ -1152,7 +1153,7 @@ static int decode_mb_b(AVSContext *h, enum cavs_mb mb_type)
         for (block = 0; block < 4; block++) {
             switch (sub_type[block]) {
             case B_SUB_DIRECT:
-                if (!h->col_type_base[0][h->mbidx]) {
+                if (!h->col_type_base[h->mbidx]) {
                     /* intra MB at co-location, do in-plane prediction */
                     if(flags==0) {
                         // if col-MB is a Intra MB, current Block size is 16x16.
@@ -1718,11 +1719,11 @@ static int decode_pic(AVSContext *h)
             //printf("Here we go again!\n");
             //get_bits(&h->gb, 5); //TODO: Figure out why we need to gobble up 5 bits here
             //if(1 || h->cur.f->pict_type != AV_PICTURE_TYPE_B) {
-            int notfound = true;
+            //int notfound = true;
             for(int i = 0; i < 990000; i++) {
                 if ((show_bits_long(&h->gb, 24) & 0xFFFFFF) == 0x000001) {
                     //printf("Had to eat %d bits...\n", i);
-                    notfound = false;
+                    //notfound = false;
                     break;
                 }
                 get_bits(&h->gb, 1);
