@@ -22,14 +22,21 @@
 #ifndef AVCODEC_CAVS_H
 #define AVCODEC_CAVS_H
 
+#include <stddef.h>
+#include <stdint.h>
+
+#include "libavutil/frame.h"
 #include "libavutil/mem_internal.h"
 
+#include "avcodec.h"
+#include "aec.h"
 #include "cavsdsp.h"
 #include "blockdsp.h"
 #include "h264chroma.h"
 #include "idctdsp.h"
 #include "get_bits.h"
 #include "videodsp.h"
+#include "cavs_aec_symbols.h"
 
 #define SLICE_MAX_START_CODE    0x000001af
 #define EXT_START_CODE          0x000001b5
@@ -59,6 +66,10 @@
 
 #define MV_BWD_OFFS                     12
 #define MV_STRIDE                        4
+
+#define CAVS_PROFILE_JIZHUN       0x20       // AVS1 P2
+#define CAVS_PROFILE_GUANGDIAN    0x48       // AVS1 P16/AVS+
+
 
 enum cavs_mb {
   I_8X8 = 0,
@@ -142,11 +153,26 @@ enum cavs_mv_loc {
   MV_BWD_X3
 };
 
-DECLARE_ALIGNED(8, typedef, struct) {
+enum cavs_mv_direction {
+  MV_NONE = 0,
+  MV_FWD = 1,
+  MV_BWD = 2
+};
+
+//DECLARE_ALIGNED(8, typedef, struct) {
+typedef struct {
     int16_t x;
     int16_t y;
     int16_t dist;
-    int16_t ref;
+    int8_t ref;
+    int8_t direction;
+    int16_t rx;
+    int16_t ry;
+    int8_t rref;
+    /*
+    int8_t fill;
+    int8_t fill2;
+    */
 } cavs_vector;
 
 struct dec_2dvlc {
@@ -171,8 +197,11 @@ typedef struct AVSContext {
     CAVSDSPContext  cdsp;
     GetBitContext gb;
     AVSFrame cur;     ///< currently decoded frame
-    AVSFrame DPB[2];  ///< reference frames
-    int dist[2];     ///< temporal distances from current frame to ref frames
+    AVSFrame DPB[4];  ///< reference frames/fields
+    AVSFrame combined_ip; ///< Combined fields into one frame
+    AVSFrame combined; ///< Combined fields into one frame
+    Aec aec;
+    int dist[4];     ///< temporal distances from current frame to ref frames/fields
     int low_delay;
     int profile, level;
     int aspect_ratio;
@@ -180,14 +209,17 @@ typedef struct AVSContext {
     int width, height;
     int stream_revision; ///<0 for samples from 2006, 1 for rm52j encoder
     int progressive;
+    int progressive_sequence;
     int pic_structure;
     int skip_mode_flag; ///< select between skip_count or one skip_flag per MB
     int loop_filter_disable;
     int alpha_offset, beta_offset;
-    int ref_flag;
+    int ref_flag; ///< If set means all MBs use default reference pictures
+    int aec_enable;
     int mbx, mby, mbidx; ///< macroblock coordinates
     int flags;         ///< availability flags of neighbouring macroblocks
     int stc;           ///< last start code
+    int field;         ///< Which field we are on, 0 for first, 1 for second.
     uint8_t *cy, *cu, *cv; ///< current MB sample pointers
     int left_qp;
     uint8_t *top_qp;
@@ -213,14 +245,33 @@ typedef struct AVSContext {
        3:    A1  X0  X1
        6:    A3  X2  X3   */
     int pred_mode_Y[3*3];
+    /** chroma pred mode cache
+     * A = Left
+     * B = Top
+    */
+    int pred_mode_C_A;
+    int pred_mode_C_B;
+    int chroma_pred;
     int *top_pred_Y;
+    int *top_pred_C;
+
+    int nz_coeff_A;
+    int nz_coeff_B;
     ptrdiff_t l_stride, c_stride;
     int luma_scan[4];
     int qp;
     int qp_fixed;
+    int qp_delta_last;
+    int qp_delta;
     int pic_qp_fixed;
     int cbp;
     ScanTable scantable;
+    int tcbp;
+    int lcbp;
+    int *top_cbp;
+    int mb_type;
+    int *top_mb_type;
+    uint8_t permutated_scantable[64];
 
     /** intra prediction is done with un-deblocked samples
      they are saved here before deblocking the MB  */
@@ -235,8 +286,8 @@ typedef struct AVSContext {
 
     /* scaling factors for MV prediction */
     int sym_factor;    ///< for scaling in symmetrical B block
-    int direct_den[2]; ///< for scaling in direct B block
-    int scale_den[2];  ///< for scaling neighbouring MVs
+    int direct_den[4]; ///< for scaling in direct B block
+    int scale_den[4];  ///< for scaling neighbouring MVs
 
     uint8_t *edge_emu_buffer;
 
@@ -252,6 +303,7 @@ extern const cavs_vector ff_cavs_dir_mv;
 static inline void set_mvs(cavs_vector *mv, enum cavs_block size) {
     switch(size) {
     case BLK_16X16:
+        mv[1] = mv[0];
         mv[MV_STRIDE  ] = mv[0];
         mv[MV_STRIDE+1] = mv[0];
     case BLK_16X8:
